@@ -1,0 +1,13 @@
+[package]
+name = "proctmux"
+version = "0.1.0"
+authors = ["Eddie Hickey"]
+description = "TUI for running multiple processes in parallel in easily switchable tmux panes"
+repository = "https://github.com/erhickey/proctmux"
+license = "MIT"
+readme = "README.md"
+edition = "2021"
+categories = ["command-line-utilities"]
+
+[dependencies]
+crossterm = "0.26"
