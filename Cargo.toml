@@ -10,6 +10,4 @@ edition = "2021"
 categories = ["command-line-utilities"]
 
 [dependencies]
-async-std = "1.12"
-crossterm = { version = "0.26", features = ["event-stream"] }
-futures = "0.3"
+termion = "2.0"
