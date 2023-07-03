@@ -1,48 +1,82 @@
 use std::{process::{Command, Output}, io::Error};
 
-const TMUX_SESSION_NAME: &str = "proctmux detached panes";
+pub fn current_session() -> Result<Output, Error> {
+    Command::new("tmux")
+            .arg("display-message")
+            .arg("-p")
+            .arg("#S")
+            .output()
+}
 
-pub fn start_detached_session() -> Result<Output, Error> {
+pub fn current_window() -> Result<Output, Error> {
+    Command::new("tmux")
+            .arg("display-message")
+            .arg("-p")
+            .arg("#I")
+            .output()
+}
+
+pub fn current_pane() -> Result<Output, Error> {
+    Command::new("tmux")
+            .arg("display-message")
+            .arg("-p")
+            .arg("#P")
+            .output()
+}
+
+pub fn start_detached_session(session: &str) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("new-session")
             .arg("-d")
             .arg("-s")
-            .arg(TMUX_SESSION_NAME)
+            .arg(session)
             .output()
 }
 
-pub fn set_remain_on_exit(on: bool) -> Result<Output, Error> {
+pub fn set_remain_on_exit(session: &str, window: usize, on: bool) -> Result<Output, Error> {
      Command::new("tmux")
              .arg("set-option")
              .arg("-t")
-             .arg("0:0")
+             .arg(format!("{}:{}", session, window))
              .arg("remain-on-exit")
              .arg(if on { "on" } else { "off" })
              .output()
 }
 
-pub fn stop_detached_session() -> Result<Output, Error> {
+pub fn kill_session(session: &str) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("kill-session")
             .arg("-t")
-            .arg(TMUX_SESSION_NAME)
+            .arg(session)
             .output()
 }
 
-pub fn break_pane(window_id: usize, window_label: &str) -> Result<Output, Error> {
+pub fn break_pane(
+    source_session: &str,
+    source_window: usize,
+    source_pane: usize,
+    dest_session: &str,
+    dest_window: usize,
+    window_label: &str
+) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("break-pane")
             .arg("-d")
             .arg("-s")
-            .arg("0:0.1")
+            .arg(format!("{}:{}.{}", source_session, source_window, source_pane))
             .arg("-t")
-            .arg(format!("{}:{}", TMUX_SESSION_NAME, window_id))
+            .arg(format!("{}:{}", dest_session, dest_window))
             .arg("-n")
             .arg(window_label)
             .output()
 }
 
-pub fn join_pane(window_id: usize) -> Result<Output, Error> {
+pub fn join_pane(
+    source_session: &str,
+    source_window: usize,
+    dest_session: &str,
+    dest_window: usize,
+) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("join-pane")
             .arg("-d")
@@ -50,13 +84,13 @@ pub fn join_pane(window_id: usize) -> Result<Output, Error> {
             .arg("-l")
             .arg("70%")
             .arg("-s")
-            .arg(format!("{}:{}", TMUX_SESSION_NAME, window_id))
+            .arg(format!("{}:{}", source_session, source_window))
             .arg("-t")
-            .arg("0:0")
+            .arg(format!("{}:{}", dest_session, dest_window))
             .output()
 }
 
-pub fn create_pane(command: &str) -> Result<Output, Error> {
+pub fn create_pane(session: &str, window: usize, pane: usize, command: &str) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("split-window")
             .arg("-d")
@@ -64,7 +98,7 @@ pub fn create_pane(command: &str) -> Result<Output, Error> {
             .arg("-l")
             .arg("70%")
             .arg("-t")
-            .arg("0:0.0")
+            .arg(format!("{}:{}.{}", session, window, pane))
             .arg(command)
             .output()
 }

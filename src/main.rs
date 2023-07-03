@@ -1,11 +1,15 @@
-mod tmux;
 mod config;
+mod tmux;
+mod tmux_context;
+
 use std::io::{stdin, stdout, Result, Stdout, Write};
 
 use termion::{clear, cursor, raw::IntoRawMode, style, terminal_size};
 use termion::color::{self, Bg, Fg};
 use termion::event::Key;
 use termion::input::TermRead;
+
+use tmux_context::{create_tmux_context, TmuxContext};
 
 const UP: char = '▲';
 const DOWN: char = '▼';
@@ -46,7 +50,8 @@ fn create_command(id: usize, label: &str, command: &str) -> Command {
 struct State {
     current_selection: usize,
     commands: Vec<Command>,
-    messages: Vec<String>
+    messages: Vec<String>,
+    tmux_context: TmuxContext
 }
 
 impl State {
@@ -57,14 +62,15 @@ impl State {
     fn break_pane(&mut self) {
         let command = self.current_command();
         if command.pane_status != PaneStatus::Null {
-            tmux::break_pane(command.id, &command.label);
+            // TODO: remove hard-coded 1
+            self.tmux_context.break_pane(1, command.id, &command.label);
         }
     }
 
     fn join_pane(&mut self) {
         let command = self.current_command();
         if command.pane_status != PaneStatus::Null {
-            tmux::join_pane(command.id);
+            self.tmux_context.join_pane(command.id);
         }
     }
 
@@ -94,11 +100,11 @@ impl State {
         self.commands[self.current_selection].status = ProcessStatus::Running;
         let command = self.current_command();
         if command.pane_status == PaneStatus::Dead {
-            // tmux respawn-window
+            // TODO: tmux respawn-window
         }
         if command.pane_status == PaneStatus::Null {
             self.messages = vec![format!("creating pane: {}", command.command)];
-            let result = tmux::create_pane(&command.command);
+            let result = self.tmux_context.create_pane(&command.command);
             match result {
                 Ok(output) => self.messages.push(format!("{}", String::from_utf8_lossy(&output.stdout))),
                 Err(e) => self.messages.push(format!("{e}")),
@@ -117,6 +123,8 @@ impl State {
 }
 
 fn main() -> Result<()> {
+    let tmux_context = create_tmux_context("proctmux detached panes".to_string())?;
+
     let state = State {
         current_selection: 0,
         commands: vec![
@@ -124,23 +132,18 @@ fn main() -> Result<()> {
             create_command(2, "Echo x10", "for i in 1 2 3 4 5 6 7 8 9 10 ; do echo $i; sleep 2 ; done"),
             create_command(3, "vim", "vim")
         ],
-        messages: vec![]
+        messages: vec![],
+        tmux_context
     };
-
-    tmux::start_detached_session()?;
-    tmux::set_remain_on_exit(true)?;
 
     let mut stdout = stdout().into_raw_mode()?;
 
     write!(stdout, "{}", cursor::Hide)?;
 
-    draw_screen(&state, &stdout).expect("fuck");
+    draw_screen(&state, &stdout)?;
     event_loop(state, &stdout);
 
     write!(stdout, "{}{}{}", cursor::Goto(0, 1), clear::All, cursor::Show)?;
-
-    tmux::stop_detached_session()?;
-    tmux::set_remain_on_exit(false)?;
 
     Ok(())
 }
@@ -214,6 +217,8 @@ fn draw_screen(state: &State, mut stdout: &Stdout) -> Result<()> {
 }
 
 fn event_loop(mut state: State, mut stdout: &Stdout) {
+    state.tmux_context.prepare();
+
     let stdin = stdin();
 
     for c in stdin.keys() {
@@ -239,6 +244,7 @@ fn event_loop(mut state: State, mut stdout: &Stdout) {
                 draw_screen(&state, stdout);
             },
             Ok(Key::Char('q')) => {
+                state.tmux_context.cleanup();
                 break;
             },
             Err(e) => {
