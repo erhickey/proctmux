@@ -59,7 +59,8 @@ impl TmuxContext {
             source_pane,
             &self.detached_session,
             dest_window,
-            window_label)
+            window_label)?;
+        tmux::set_remain_on_exit(&self.detached_session, dest_window, true)
     }
 
     pub fn join_pane(&self, target_window: usize) -> Result<Output, Error> {
