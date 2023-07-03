@@ -1,5 +1,5 @@
 mod tmux;
-
+mod config;
 use std::io::{stdin, stdout, Result, Stdout, Write};
 
 use termion::{clear, cursor, raw::IntoRawMode, style, terminal_size};
