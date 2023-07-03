@@ -76,6 +76,7 @@ pub fn join_pane(
     source_window: usize,
     dest_session: &str,
     dest_window: usize,
+    dest_pane: usize
 ) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("join-pane")
@@ -86,7 +87,7 @@ pub fn join_pane(
             .arg("-s")
             .arg(format!("{}:{}", source_session, source_window))
             .arg("-t")
-            .arg(format!("{}:{}", dest_session, dest_window))
+            .arg(format!("{}:{}.{}", dest_session, dest_window, dest_pane))
             .output()
 }
 
@@ -99,6 +100,9 @@ pub fn create_pane(session: &str, window: usize, pane: usize, command: &str) -> 
             .arg("70%")
             .arg("-t")
             .arg(format!("{}:{}.{}", session, window, pane))
+            .arg("-P")
+            .arg("-F")
+            .arg("#{pane_index}")
             .arg(command)
             .output()
 }

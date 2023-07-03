@@ -34,7 +34,8 @@ struct Command {
     label: String,
     command: String,
     status: ProcessStatus,
-    pane_status: PaneStatus
+    pane_status: PaneStatus,
+    pane_id: Option<usize>
 }
 
 fn create_command(id: usize, label: &str, command: &str) -> Command {
@@ -44,6 +45,7 @@ fn create_command(id: usize, label: &str, command: &str) -> Command {
         , command: command.to_string()
         , status: ProcessStatus::Halted
         , pane_status: PaneStatus::Null
+        , pane_id: None
         }
 }
 
@@ -61,16 +63,17 @@ impl State {
 
     fn break_pane(&mut self) {
         let command = self.current_command();
-        if command.pane_status != PaneStatus::Null {
-            // TODO: remove hard-coded 1
-            self.tmux_context.break_pane(1, command.id, &command.label);
+        if command.pane_status != PaneStatus::Null && command.pane_id.is_some() {
+            self.tmux_context.break_pane(command.pane_id.unwrap(), command.id, &command.label);
+            self.commands[self.current_selection].pane_id = None;
         }
     }
 
     fn join_pane(&mut self) {
         let command = self.current_command();
         if command.pane_status != PaneStatus::Null {
-            self.tmux_context.join_pane(command.id);
+            let pane_id = self.tmux_context.join_pane(command.id).unwrap();
+            self.commands[self.current_selection].pane_id = Some(pane_id);
         }
     }
 
@@ -104,11 +107,8 @@ impl State {
         }
         if command.pane_status == PaneStatus::Null {
             self.messages = vec![format!("creating pane: {}", command.command)];
-            let result = self.tmux_context.create_pane(&command.command);
-            match result {
-                Ok(output) => self.messages.push(format!("{}", String::from_utf8_lossy(&output.stdout))),
-                Err(e) => self.messages.push(format!("{e}")),
-            }
+            let pane_id = self.tmux_context.create_pane(&command.command).unwrap();
+            self.commands[self.current_selection].pane_id = Some(pane_id);
             self.commands[self.current_selection].pane_status = PaneStatus::Running;
         }
     }
