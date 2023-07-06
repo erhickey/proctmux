@@ -1,139 +1,38 @@
 mod config;
+mod model;
+mod draw;
 mod tmux;
 mod tmux_context;
+mod event;
+mod args;
+use std::io::{stdout, Write};
 
-use std::io::{stdin, stdout, Result, Stdout, Write};
+use args::parse_config_from_args;
+use draw::draw_screen;
+use event::event_loop;
+use model::{create_command, State};
+use termion::{clear, cursor, raw::IntoRawMode};
 
-use termion::{clear, cursor, raw::IntoRawMode, style, terminal_size};
-use termion::color::{self, Bg, Fg};
-use termion::event::Key;
-use termion::input::TermRead;
+use tmux_context::create_tmux_context;
 
-use tmux_context::{create_tmux_context, TmuxContext};
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = parse_config_from_args()?;
 
-const UP: char = '▲';
-const DOWN: char = '▼';
-
-#[derive(Clone)]
-enum ProcessStatus {
-    Running = 1,
-    Halting = 2,
-    Halted = 3
-}
-
-#[derive(Clone, Eq, PartialEq)]
-enum PaneStatus {
-    Null = 1,
-    Running = 2,
-    Dead = 3
-}
-
-#[derive(Clone)]
-struct Command {
-    id: usize,
-    label: String,
-    command: String,
-    status: ProcessStatus,
-    pane_status: PaneStatus,
-    pane_id: Option<usize>
-}
-
-fn create_command(id: usize, label: &str, command: &str) -> Command {
-    Command
-        { id
-        , label: label.to_string()
-        , command: command.to_string()
-        , status: ProcessStatus::Halted
-        , pane_status: PaneStatus::Null
-        , pane_id: None
-        }
-}
-
-struct State {
-    current_selection: usize,
-    commands: Vec<Command>,
-    messages: Vec<String>,
-    tmux_context: TmuxContext
-}
-
-impl State {
-    fn current_command(&mut self) -> Command {
-        self.commands[self.current_selection].clone()
-    }
-
-    fn break_pane(&mut self) {
-        let command = self.current_command();
-        if command.pane_status != PaneStatus::Null && command.pane_id.is_some() {
-            self.tmux_context.break_pane(command.pane_id.unwrap(), command.id, &command.label);
-            self.commands[self.current_selection].pane_id = None;
-        }
-    }
-
-    fn join_pane(&mut self) {
-        let command = self.current_command();
-        if command.pane_status != PaneStatus::Null {
-            let pane_id = self.tmux_context.join_pane(command.id).unwrap();
-            self.commands[self.current_selection].pane_id = Some(pane_id);
-        }
-    }
-
-    fn next_command(&mut self) {
-        self.messages = vec![];
-        self.break_pane();
-        if self.current_selection >= self.commands.len() - 1 {
-            self.current_selection = 0;
-        } else {
-            self.current_selection += 1;
-        }
-        self.join_pane();
-    }
-
-    fn previous_command(&mut self) {
-        self.messages = vec![];
-        self.break_pane();
-        if self.current_selection <= 0 {
-            self.current_selection = self.commands.len() - 1;
-        } else {
-            self.current_selection -= 1;
-        }
-        self.join_pane();
-    }
-
-    fn start_process(&mut self) {
-        self.commands[self.current_selection].status = ProcessStatus::Running;
-        let command = self.current_command();
-        if command.pane_status == PaneStatus::Dead {
-            // TODO: tmux respawn-window
-        }
-        if command.pane_status == PaneStatus::Null {
-            self.messages = vec![format!("creating pane: {}", command.command)];
-            let pane_id = self.tmux_context.create_pane(&command.command).unwrap();
-            self.commands[self.current_selection].pane_id = Some(pane_id);
-            self.commands[self.current_selection].pane_status = PaneStatus::Running;
-        }
-    }
-
-    fn halt_process(&mut self) {
-        self.commands[self.current_selection].status = ProcessStatus::Halted;
-    }
-
-    fn set_halting(&mut self) {
-        self.commands[self.current_selection].status = ProcessStatus::Halting;
-    }
-}
-
-fn main() -> Result<()> {
     let tmux_context = create_tmux_context("proctmux detached panes".to_string())?;
 
     let state = State {
         current_selection: 0,
         commands: vec![
             create_command(1, "Simple Echo", "echo hi"),
-            create_command(2, "Echo x10", "for i in 1 2 3 4 5 6 7 8 9 10 ; do echo $i; sleep 2 ; done"),
-            create_command(3, "vim", "vim")
+            create_command(
+                2,
+                "Echo x10",
+                "for i in 1 2 3 4 5 6 7 8 9 10 ; do echo $i; sleep 2 ; done",
+            ),
+            create_command(3, "vim", "vim"),
         ],
         messages: vec![],
-        tmux_context
+        tmux_context,
     };
 
     let mut stdout = stdout().into_raw_mode()?;
@@ -141,116 +40,16 @@ fn main() -> Result<()> {
     write!(stdout, "{}", cursor::Hide)?;
 
     draw_screen(&state, &stdout)?;
-    event_loop(state, &stdout);
+    event_loop(state, &stdout, &config)?;
 
-    write!(stdout, "{}{}{}", cursor::Goto(0, 1), clear::All, cursor::Show)?;
+    write!(
+        stdout,
+        "{}{}{}",
+        cursor::Goto(0, 1),
+        clear::All,
+        cursor::Show
+    )?;
 
     Ok(())
 }
 
-fn draw_screen(state: &State, mut stdout: &Stdout) -> Result<()> {
-    write!(stdout, "{}", clear::All)?;
-
-    for (ix, c) in state.commands.iter().enumerate() {
-        match c.status {
-            ProcessStatus::Running =>
-                write!(
-                    stdout,
-                    "{}{} {} ",
-                    cursor::Goto(0, (ix + 1) as u16),
-                    Fg(color::Green),
-                    UP
-                )?,
-            ProcessStatus::Halting =>
-                write!(
-                    stdout,
-                    "{}{} {} ",
-                    cursor::Goto(0, (ix + 1) as u16),
-                    Fg(color::Yellow),
-                    UP
-                )?,
-            ProcessStatus::Halted =>
-                write!(
-                    stdout,
-                    "{}{} {} ",
-                    cursor::Goto(0, (ix + 1) as u16),
-                    Fg(color::Red),
-                    DOWN,
-                )?
-        }
-
-        if state.current_selection == ix {
-            write!(
-                stdout,
-                "{}{}{}{:width$}{}",
-                Bg(color::LightMagenta),
-                Fg(color::Black),
-                style::Bold,
-                c.label,
-                style::Reset,
-                width=20
-            )?;
-        } else {
-            write!(
-                stdout,
-                "{}{}{}",
-                Fg(color::Cyan),
-                c.label,
-                style::Reset
-            )?;
-        }
-    }
-
-    for (ix, msg) in state.messages.iter().enumerate() {
-        let (_, height) = terminal_size()?;
-        write!(
-            stdout,
-            "{}{}{}",
-            cursor::Goto(0, height - ix as u16),
-            Fg(color::Red),
-            msg
-        )?;
-    }
-
-    stdout.flush()?;
-    Ok(())
-}
-
-fn event_loop(mut state: State, mut stdout: &Stdout) {
-    state.tmux_context.prepare();
-
-    let stdin = stdin();
-
-    for c in stdin.keys() {
-        match c {
-            Ok(Key::Char('j')) => {
-                state.next_command();
-                draw_screen(&state, stdout);
-            },
-            Ok(Key::Char('k')) => {
-                state.previous_command();
-                draw_screen(&state, stdout);
-            },
-            Ok(Key::Char('s')) => {
-                state.start_process();
-                draw_screen(&state, stdout);
-            },
-            Ok(Key::Char('x')) => {
-                state.halt_process();
-                draw_screen(&state, stdout);
-            },
-            Ok(Key::Char('h')) => {
-                state.set_halting();
-                draw_screen(&state, stdout);
-            },
-            Ok(Key::Char('q')) => {
-                state.tmux_context.cleanup();
-                break;
-            },
-            Err(e) => {
-                write!(stdout, "{}", e);
-            },
-            _ => {}
-        }
-    }
-}

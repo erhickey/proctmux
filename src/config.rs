@@ -6,8 +6,9 @@ fn get_current_working_dir() -> std::io::Result<PathBuf> {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-struct ProcTmuxConfig {
-    procs: HashMap<String, ProcessConfig>,
+pub struct ProcTmuxConfig {
+    pub procs: HashMap<String, ProcessConfig>,
+    pub keybinding: KeybindingConfig,
 }
 
 fn default_kill_signal() -> String {
@@ -19,23 +20,79 @@ fn current_working_dir() -> String {
 fn default_autostart() -> bool {
     false 
 }
+fn default_quit_keybinding() -> Vec<String> {
+    vec!["q".to_string()]
+}
+fn default_start_keybinding() -> Vec<String> {
+    vec!["s".to_string()]
+}
+fn default_stop_keybinding() -> Vec<String> {
+    vec!["x".to_string()]
+}
+fn default_up_keybinding() -> Vec<String> {
+    vec!["up".to_string(), "k".to_string()]
+}
+fn default_down_keybinding() -> Vec<String> {
+    vec!["down".to_string(), "j".to_string()]
+}
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct KeybindingConfig {
+    // quit: List[str] = field(default_factory=lambda: ['q'])
+    // filter: List[str] = field(default_factory=lambda: ['/'])
+    // submit_filter: List[str] = field(default_factory=lambda: ['enter'])
+    // next_input: List[str] = field(default_factory=lambda: ['tab', 'down'])
+    // previous_input: List[str] = field(default_factory=lambda: ['s-tab', 'up'])
+    // submit_dialog: List[str] = field(default_factory=lambda: ['enter'])
+    // cancel_dialog: List[str] = field(default_factory=lambda: ['escape'])
+    // start: List[str] = field(default_factory=lambda: ['s'])
+    // stop: List[str] = field(default_factory=lambda: ['x'])
+    // up: List[str] = field(default_factory=lambda: ['up', 'k'])
+    // down: List[str] = field(default_factory=lambda: ['down', 'j'])
+    // switch_focus: List[str] = field(default_factory=lambda: ['c-w'])
+    // zoom: List[str] = field(default_factory=lambda: ['c-z'])
+    // docs: List[str] = field(default_factory=lambda: ['?'])
+    // toggle_scroll: List[str] = field(default_factory=lambda: ['c-s'])
+    // #[serde(default = "default_quit_keybinding")]
+    // quit: Vec<String>,
+    // filter: Option<Vec<String>>,
+    // submit_filter: Option<Vec<String>>,
+    // next_input: Option<Vec<String>>,
+    // previous_input: Option<Vec<String>>,
+    // submit_dialog: Option<Vec<String>>,
+    // cancel_dialog: Option<Vec<String>>,
+    // switch_focus: Option<Vec<String>>,
+    // zoom: Option<Vec<String>>,
+    // docs: Option<Vec<String>>,
+
+    #[serde(default = "default_quit_keybinding")]
+    pub quit: Vec<String>,
+    #[serde(default = "default_start_keybinding")]
+    pub start: Vec<String>,
+    #[serde(default = "default_stop_keybinding")]
+    pub stop: Vec<String>,
+    #[serde(default = "default_up_keybinding")]
+    pub up: Vec<String>,
+    #[serde(default = "default_down_keybinding")]
+    pub down: Vec<String>,
+}
+
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-struct ProcessConfig{
+pub struct ProcessConfig{
     #[serde(default = "default_autostart")]
-    autostart: bool,
-    shell: Option<String>,
-    cmd: Option<Vec<String>>,
+    pub autostart: bool,
+    pub shell: Option<String>,
+    pub cmd: Option<Vec<String>>,
     #[serde(default = "current_working_dir")]
-    cwd: String,
+    pub cwd: String,
     #[serde(default = "default_kill_signal")]
-    stop: String,
-    env: Option<HashMap<String, Option<String>>>,
-    add_path: Option<Vec<String>>,
-    description: Option<String>,
-    docs: Option<String>,
-    categories: Option<Vec<String>>,
-    meta_tags: Option<Vec<String>>
+    pub stop: String,
+    pub env: Option<HashMap<String, Option<String>>>,
+    pub add_path: Option<Vec<String>>,
+    pub description: Option<String>,
+    pub docs: Option<String>,
+    pub categories: Option<Vec<String>>,
+    pub meta_tags: Option<Vec<String>>
 }
 
 #[cfg(test)]
