@@ -1,12 +1,31 @@
-use std::io::{Stdout, Write};
+use std::io::{stdout, Stdout, Write};
+
+use termion::{clear, cursor, style, terminal_size};
+use termion::color::{self, Bg, Fg};
+use termion:: raw::{IntoRawMode, RawTerminal};
 
 use crate::model::{ProcessStatus, State};
-use termion::color::{self, Bg, Fg};
-use termion::{clear, cursor, style, terminal_size};
 
 
 const UP: char = '▲';
 const DOWN: char = '▼';
+
+pub fn init_screen() -> Result<RawTerminal<Stdout>, Box<dyn std::error::Error>> {
+    let mut stdout = stdout().into_raw_mode()?;
+    write!(stdout, "{}", cursor::Hide)?;
+    Ok(stdout)
+}
+
+pub fn prepare_screen_for_exit(mut stdout: &Stdout) -> Result<(), Box<dyn std::error::Error>> {
+    write!(
+        stdout,
+        "{}{}{}",
+        cursor::Goto(0, 1),
+        clear::All,
+        cursor::Show
+    )?;
+    Ok(())
+}
 
 pub fn draw_screen(state: &State, mut stdout: &Stdout) -> Result<(), Box<dyn std::error::Error>> {
     write!(stdout, "{}", clear::All)?;

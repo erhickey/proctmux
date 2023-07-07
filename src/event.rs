@@ -9,6 +9,7 @@ fn matches_key(key: Key, acceptable_keys: &[String]) -> bool {
         _ => false,
     }
 }
+
 pub fn event_loop(
     mut state: State,
     mut stdout: &Stdout,
@@ -41,12 +42,12 @@ pub fn event_loop(
                     state.set_halting();
                     draw_screen(&state, stdout)?;
                 }
-            }
+            },
             Err(e) => {
-                write!(stdout, "{}", e);
+                write!(stdout, "{}", e)?;
             }
-            _ => {}
         }
     }
+
     Ok(())
 }

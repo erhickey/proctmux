@@ -5,20 +5,17 @@ mod tmux;
 mod tmux_context;
 mod event;
 mod args;
-use std::io::{stdout, Write};
 
 use args::parse_config_from_args;
-use draw::draw_screen;
+use draw::{draw_screen, init_screen, prepare_screen_for_exit};
 use event::event_loop;
 use model::{create_command, State};
-use termion::{clear, cursor, raw::IntoRawMode};
-
 use tmux_context::create_tmux_context;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = parse_config_from_args()?;
 
-    let tmux_context = create_tmux_context("proctmux detached panes".to_string())?;
+    let tmux_context = create_tmux_context("proctmux background processes".to_string())?;
 
     let state = State {
         current_selection: 0,
@@ -35,20 +32,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tmux_context,
     };
 
-    let mut stdout = stdout().into_raw_mode()?;
 
-    write!(stdout, "{}", cursor::Hide)?;
-
+    let stdout = init_screen()?;
     draw_screen(&state, &stdout)?;
+
     event_loop(state, &stdout, &config)?;
 
-    write!(
-        stdout,
-        "{}{}{}",
-        cursor::Goto(0, 1),
-        clear::All,
-        cursor::Show
-    )?;
+    prepare_screen_for_exit(&stdout)?;
 
     Ok(())
 }
