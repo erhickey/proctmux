@@ -106,3 +106,13 @@ pub fn create_pane(session: &str, window: usize, pane: usize, command: &str) -> 
             .arg(command)
             .output()
 }
+
+pub fn get_pane_pid(session: &str, window: usize, pane: usize) -> Result<Output, Error> {
+    Command::new("tmux")
+        .arg("display-message")
+        .arg("-p")
+        .arg("-t")
+        .arg(format!("{}:{}.{}", session, window, pane))
+        .arg("#{pane_pid}")
+        .output()
+}

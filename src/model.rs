@@ -102,10 +102,14 @@ impl State {
     }
 
     pub fn halt_process(&mut self) {
-        self.commands[self.current_selection].status = ProcessStatus::Halted;
-    }
+        if self.commands[self.current_selection].pane_status != PaneStatus::Running {
+            return;
+        }
 
-    pub fn set_halting(&mut self) {
-        self.commands[self.current_selection].status = ProcessStatus::Halting;
+        if let Some(pane_id) = self.commands[self.current_selection].pane_id {
+            let pane_pid = self.tmux_context.get_pane_pid(pane_id).unwrap();
+            unsafe { libc::kill(pane_pid, libc::SIGKILL) };
+            self.commands[self.current_selection].status = ProcessStatus::Halting;
+        }
     }
 }

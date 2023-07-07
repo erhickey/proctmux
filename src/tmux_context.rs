@@ -88,4 +88,19 @@ impl TmuxContext {
             Err(_) => Err(Error::new(std::io::ErrorKind::Other, "Error: Could not parse create_pane output"))
         }
     }
+
+    pub fn get_pane_pid(&self, pane: usize) -> Result<i32, Error> {
+        let pid = tmux::get_pane_pid(&self.session, self.window, pane)?;
+
+        match String::from_utf8(pid.stdout) {
+            Ok(val) => match val.replace("\n", "").parse() {
+                Ok(i) => Ok(i),
+                Err(_) => Err(Error::new(
+                    std::io::ErrorKind::Other,
+                    "Error: Could not convert pane_pid output to int"
+                ))
+            },
+            Err(_) => Err(Error::new(std::io::ErrorKind::Other, "Error: Could not parse pane_pid output"))
+        }
+    }
 }

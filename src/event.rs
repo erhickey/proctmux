@@ -38,9 +38,6 @@ pub fn event_loop(
                 } else if matches_key(key, &keybinding.stop) {
                     state.halt_process();
                     draw_screen(&state, stdout)?;
-                } else if key == Key::Char('h') {
-                    state.set_halting();
-                    draw_screen(&state, stdout)?;
                 }
             },
             Err(e) => {

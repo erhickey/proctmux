@@ -10,6 +10,7 @@ edition = "2021"
 categories = ["command-line-utilities"]
 
 [dependencies]
+libc = "0.2.147"
 termion = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
