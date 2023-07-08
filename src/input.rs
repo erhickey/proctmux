@@ -13,6 +13,7 @@ fn matches_key(key: Key, acceptable_keys: &[String]) -> bool {
 }
 
 pub fn input_loop(mut controller: Controller) -> Result<(), Box<dyn Error>> {
+    controller.on_startup()?;
     let stdin = stdin();
     let keybinding = &controller.config.keybinding.clone();
 
@@ -21,7 +22,6 @@ pub fn input_loop(mut controller: Controller) -> Result<(), Box<dyn Error>> {
             Ok(key) => {
                 if matches_key(key, &keybinding.quit) {
                     controller.on_keypress_quit()?;
-                    controller.on_exit()?;
                     break;
                 } else if matches_key(key, &keybinding.down) {
                     controller.on_keypress_down()?;
@@ -39,5 +39,6 @@ pub fn input_loop(mut controller: Controller) -> Result<(), Box<dyn Error>> {
         }
     }
 
+    controller.on_exit()?;
     Ok(())
 }

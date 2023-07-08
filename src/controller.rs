@@ -46,6 +46,7 @@ impl Controller {
 
     pub fn on_keypress_quit(&self) -> Result<(), Box<dyn Error>> {
         self.tmux_context.cleanup()?;
+        // TODO: clean up dead pane(s)
         Ok(())
     }
 

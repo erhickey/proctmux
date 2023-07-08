@@ -33,8 +33,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         messages: vec![]
     };
 
-    let controller = create_controller(config, state, tmux_context)?;
-    controller.on_startup()?;
-    input_loop(controller)?;
+    input_loop(create_controller(config, state, tmux_context)?)?;
     Ok(())
 }
