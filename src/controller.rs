@@ -1,6 +1,5 @@
 use std::error::Error;
 use std::io::Stdout;
-use std::thread::spawn;
 
 use termion:: raw::RawTerminal;
 
@@ -68,13 +67,19 @@ impl Controller {
         self.state.messages.push(format!("{}", err));
     }
 
-    pub fn on_keypress_start(&mut self) -> Result<(), Box<dyn Error>> {
-        self.start_process();
-        self.draw_screen()
+    pub fn on_keypress_start(&mut self) -> Result<Option<(i32, usize)>, Box<dyn Error>> {
+        let result = self.start_process();
+        self.draw_screen()?;
+        Ok(result)
     }
 
     pub fn on_keypress_stop(&mut self) -> Result<(), Box<dyn Error>> {
         self.halt_process();
+        self.draw_screen()
+    }
+
+    pub fn on_process_terminated(&mut self, process_index: usize) -> Result<(), Box<dyn Error>> {
+        self.state.set_process_halted(process_index);
         self.draw_screen()
     }
 
@@ -96,11 +101,11 @@ impl Controller {
         }
     }
 
-    pub fn start_process(&mut self) {
+    pub fn start_process(&mut self) -> Option<(i32, usize)> {
         let process = self.state.current_process().clone();
 
         if process.status != ProcessStatus::Halted {
-            return;
+            return None;
         }
 
         self.state.set_process_running(self.state.current_selection);
@@ -113,25 +118,13 @@ impl Controller {
             let pane_id = self.tmux_context.create_pane(&process.command).unwrap();
             self.state.set_pane_id(self.state.current_selection, Some(pane_id));
             self.state.set_pane_running(self.state.current_selection);
-            self.spawn_pid_watcher_thread(
+            return Some((
                 self.tmux_context.get_pane_pid(pane_id).unwrap(),
                 self.state.current_selection
-            );
+            ));
         }
-    }
 
-    pub fn spawn_pid_watcher_thread(&mut self, pid: i32, process_index: usize) {
-        // spawn(move || unsafe {
-        //     let mut file = std::fs::File::create("foo.txt").unwrap();
-        //     use std::io::prelude::*;
-        //     let l1 = format!("{}\n", pid);
-        //     file.write_all(l1.as_bytes());
-        //     // BUG: waitpid returns immediately, should options be something other than 0?
-        //     libc::waitpid(pid, std::ptr::null_mut(), 0);
-        //     file.write_all(b"waitpid done");
-        //     self.state.set_process_halted(process_index);
-        //     self.draw_screen();
-        // });
+        None
     }
 
     pub fn halt_process(&mut self) {
