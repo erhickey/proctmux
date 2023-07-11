@@ -1,6 +1,4 @@
-use crate::tmux_context::TmuxContext;
-
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum ProcessStatus {
     Running = 1,
     Halting = 2,
@@ -15,7 +13,7 @@ pub enum PaneStatus {
 }
 
 #[derive(Clone)]
-pub struct Command {
+pub struct Process {
     pub id: usize,
     pub label: String,
     pub command: String,
@@ -24,92 +22,62 @@ pub struct Command {
     pub pane_id: Option<usize>,
 }
 
-pub fn create_command(id: usize, label: &str, command: &str) -> Command {
-    Command {
+pub fn create_process(id: usize, label: &str, command: &str) -> Process {
+    Process {
         id,
         label: label.to_string(),
         command: command.to_string(),
         status: ProcessStatus::Halted,
         pane_status: PaneStatus::Null,
-        pane_id: None,
+        pane_id: None
     }
 }
 
 pub struct State {
     pub current_selection: usize,
-    pub commands: Vec<Command>,
-    pub messages: Vec<String>,
-    pub tmux_context: TmuxContext,
+    pub processes: Vec<Process>,
+    pub messages: Vec<String>
 }
 
 impl State {
-    pub fn current_command(&mut self) -> Command {
-        self.commands[self.current_selection].clone()
+    pub fn current_process(&self) -> &Process {
+        &self.processes[self.current_selection]
     }
 
-    pub fn break_pane(&mut self) {
-        let command = self.current_command();
-        if command.pane_status != PaneStatus::Null && command.pane_id.is_some() {
-            self.tmux_context
-                .break_pane(command.pane_id.unwrap(), command.id, &command.label)
-                .unwrap();
-            self.commands[self.current_selection].pane_id = None;
-        }
-    }
-
-    pub fn join_pane(&mut self) {
-        let command = self.current_command();
-        if command.pane_status != PaneStatus::Null {
-            let pane_id = self.tmux_context.join_pane(command.id).unwrap();
-            self.commands[self.current_selection].pane_id = Some(pane_id);
-        }
-    }
-
-    pub fn next_command(&mut self) {
-        self.messages = vec![];
-        self.break_pane();
-        if self.current_selection >= self.commands.len() - 1 {
+    pub fn next_process(&mut self) {
+        if self.current_selection >= self.processes.len() - 1 {
             self.current_selection = 0;
         } else {
             self.current_selection += 1;
         }
-        self.join_pane();
     }
 
-    pub fn previous_command(&mut self) {
-        self.messages = vec![];
-        self.break_pane();
+    pub fn previous_process(&mut self) {
         if self.current_selection == 0 {
-            self.current_selection = self.commands.len() - 1;
+            self.current_selection = self.processes.len() - 1;
         } else {
             self.current_selection -= 1;
         }
-        self.join_pane();
     }
 
-    pub fn start_process(&mut self) {
-        self.commands[self.current_selection].status = ProcessStatus::Running;
-        let command = self.current_command();
-        if command.pane_status == PaneStatus::Dead {
-            // TODO: tmux respawn-window
-        }
-        if command.pane_status == PaneStatus::Null {
-            self.messages = vec![format!("creating pane: {}", command.command)];
-            let pane_id = self.tmux_context.create_pane(&command.command).unwrap();
-            self.commands[self.current_selection].pane_id = Some(pane_id);
-            self.commands[self.current_selection].pane_status = PaneStatus::Running;
-        }
+    pub fn set_process_running(&mut self, process_index: usize) {
+        self.processes[process_index].status = ProcessStatus::Running;
     }
 
-    pub fn halt_process(&mut self) {
-        if self.commands[self.current_selection].pane_status != PaneStatus::Running {
-            return;
-        }
+    pub fn set_process_halting(&mut self, process_index: usize) {
+        self.processes[process_index].status = ProcessStatus::Halting;
+    }
 
-        if let Some(pane_id) = self.commands[self.current_selection].pane_id {
-            let pane_pid = self.tmux_context.get_pane_pid(pane_id).unwrap();
-            unsafe { libc::kill(pane_pid, libc::SIGKILL) };
-            self.commands[self.current_selection].status = ProcessStatus::Halting;
-        }
+    pub fn set_process_halted(&mut self, process_index: usize) {
+        self.processes[process_index].status = ProcessStatus::Halted;
+        self.processes[process_index].pane_status = PaneStatus::Dead;
+    }
+
+    pub fn set_pane_running(&mut self, process_index: usize) {
+        self.processes[process_index].pane_status = PaneStatus::Running;
+    }
+
+    pub fn set_pane_id(&mut self, process_index: usize, pane_id: Option<usize>) {
+        self.processes[process_index].pane_id = pane_id;
     }
 }

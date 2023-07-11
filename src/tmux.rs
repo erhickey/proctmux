@@ -1,4 +1,4 @@
-use std::{process::{Command, Output}, io::Error};
+use std::{io::Error, process::{Command, Output}};
 
 pub fn current_session() -> Result<Output, Error> {
     Command::new("tmux")

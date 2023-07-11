@@ -35,7 +35,7 @@ fn default_up_keybinding() -> Vec<String> {
 fn default_down_keybinding() -> Vec<String> {
     vec!["down".to_string(), "j".to_string()]
 }
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct KeybindingConfig {
     // quit: List[str] = field(default_factory=lambda: ['q'])
     // filter: List[str] = field(default_factory=lambda: ['/'])

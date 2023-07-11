@@ -1,22 +1,22 @@
-use std::io::{stdout, Stdout, Write};
+use std::error::Error;
+use std::io::{Stdout, Write, stdout};
 
 use termion::{clear, cursor, style, terminal_size};
-use termion::color::{self, Bg, Fg};
+use termion::color::{Bg, Fg, self};
 use termion:: raw::{IntoRawMode, RawTerminal};
 
 use crate::model::{ProcessStatus, State};
 
-
 const UP: char = '▲';
 const DOWN: char = '▼';
 
-pub fn init_screen() -> Result<RawTerminal<Stdout>, Box<dyn std::error::Error>> {
+pub fn init_screen() -> Result<RawTerminal<Stdout>, Box<dyn Error>> {
     let mut stdout = stdout().into_raw_mode()?;
     write!(stdout, "{}", cursor::Hide)?;
     Ok(stdout)
 }
 
-pub fn prepare_screen_for_exit(mut stdout: &Stdout) -> Result<(), Box<dyn std::error::Error>> {
+pub fn prepare_screen_for_exit(mut stdout: &Stdout) -> Result<(), Box<dyn Error>> {
     write!(
         stdout,
         "{}{}{}",
@@ -27,10 +27,10 @@ pub fn prepare_screen_for_exit(mut stdout: &Stdout) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-pub fn draw_screen(state: &State, mut stdout: &Stdout) -> Result<(), Box<dyn std::error::Error>> {
+pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Error>> {
     write!(stdout, "{}", clear::All)?;
 
-    for (ix, c) in state.commands.iter().enumerate() {
+    for (ix, c) in state.processes.iter().enumerate() {
         match c.status {
             ProcessStatus::Running => write!(
                 stdout,
