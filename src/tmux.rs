@@ -91,6 +91,14 @@ pub fn join_pane(
             .output()
 }
 
+pub fn kill_pane(session: &str, window: usize, pane: usize) -> Result<Output, Error> {
+    Command::new("tmux")
+            .arg("kill-pane")
+            .arg("-t")
+            .arg(format!("{}:{}.{}", session, window, pane))
+            .output()
+}
+
 pub fn create_pane(session: &str, window: usize, pane: usize, command: &str) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("split-window")

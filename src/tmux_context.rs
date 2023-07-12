@@ -74,6 +74,11 @@ impl TmuxContext {
         Ok(self.pane + 1)
     }
 
+    pub fn kill_pane(&self, pane: usize) -> Result<Output, Error> {
+        tmux::kill_pane(&self.session, self.window, pane)
+    
+    }
+
     pub fn create_pane(&self, command: &str) -> Result<usize, Error> {
         let pane = tmux::create_pane(&self.session, self.window, self.pane, command)?;
 
