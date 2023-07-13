@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             create_process(
                 2,
                 "Echo x10",
-                "for i in 1 2 3 4 5 6 7 8 9 10 ; do echo $i; sleep 2 ; done",
+                "for i in `seq 1 10`; do echo $i; sleep 2 ; done",
             ),
             create_process(3, "vim", "vim"),
         ],

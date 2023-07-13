@@ -44,8 +44,12 @@ impl Controller {
     }
 
     pub fn on_keypress_quit(&self) -> Result<(), Box<dyn Error>> {
+        self.state.processes.iter()
+            .filter(|process| process.pane_status == PaneStatus::Dead && process.pane_id.is_some())
+            .for_each(|process| {
+                self.tmux_context.kill_pane(process.pane_id.unwrap()).unwrap();
+        });
         self.tmux_context.cleanup()?;
-        // TODO: clean up dead pane(s)
         Ok(())
     }
 
@@ -110,11 +114,11 @@ impl Controller {
 
         self.state.set_process_running(self.state.current_selection);
 
-        if process.pane_status == PaneStatus::Dead {
-            // TODO: tmux respawn-window
+        if process.pane_status == PaneStatus::Dead && process.pane_id.is_some() {
+            self.tmux_context.kill_pane(process.pane_id.unwrap()).unwrap();
         }
 
-        if process.pane_status == PaneStatus::Null {
+        if process.pane_status == PaneStatus::Null  || process.pane_status == PaneStatus::Dead {
             let pane_id = self.tmux_context.create_pane(&process.command).unwrap();
             self.state.set_pane_id(self.state.current_selection, Some(pane_id));
             self.state.set_pane_running(self.state.current_selection);
