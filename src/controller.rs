@@ -5,7 +5,7 @@ use termion:: raw::RawTerminal;
 
 use crate::config::ProcTmuxConfig;
 use crate::draw::{draw_screen, init_screen, prepare_screen_for_exit};
-use crate::model::{PaneStatus, ProcessStatus, State};
+use crate::model::{PaneStatus, ProcessStatus, State, StateMutation};
 use crate::tmux_context::TmuxContext;
 
 pub struct Controller {
@@ -55,14 +55,14 @@ impl Controller {
 
     pub fn on_keypress_down(&mut self) -> Result<(), Box<dyn Error>> {
         self.break_pane();
-        self.state.next_process();
+        self.state = StateMutation::on(self.state.clone()).next_process().commit();
         self.join_pane();
         self.draw_screen()
     }
 
     pub fn on_keypress_up(&mut self) -> Result<(), Box<dyn Error>> {
         self.break_pane();
-        self.state.previous_process();
+        self.state = StateMutation::on(self.state.clone()).previous_process().commit();
         self.join_pane();
         self.draw_screen()
     }
@@ -83,7 +83,10 @@ impl Controller {
     }
 
     pub fn on_process_terminated(&mut self, process_index: usize) -> Result<(), Box<dyn Error>> {
-        self.state.set_process_halted(process_index);
+        self.state = StateMutation::on(self.state.clone())
+            .mark_process_status(ProcessStatus::Halted, process_index)
+            .mark_pane_status(PaneStatus::Dead, process_index)
+            .commit();
         self.draw_screen()
     }
 
@@ -93,7 +96,9 @@ impl Controller {
             self.tmux_context
                 .break_pane(process.pane_id.unwrap(), process.id, &process.label)
                 .unwrap();
-            self.state.set_pane_id(self.state.current_selection, None);
+            self.state = StateMutation::on(self.state.clone())
+                .set_pane_id(None)
+                .commit();
         }
     }
 
@@ -101,7 +106,9 @@ impl Controller {
         let process = self.state.current_process();
         if process.pane_status != PaneStatus::Null {
             let pane_id = self.tmux_context.join_pane(process.id).unwrap();
-            self.state.set_pane_id(self.state.current_selection, Some(pane_id));
+            self.state = StateMutation::on(self.state.clone())
+                .set_pane_id(Some(pane_id))
+                .commit();
         }
     }
 
@@ -112,7 +119,9 @@ impl Controller {
             return None;
         }
 
-        self.state.set_process_running(self.state.current_selection);
+        let mut state_mutation = StateMutation::on(self.state.clone())
+            .mark_current_process_status(ProcessStatus::Running);
+            
 
         if process.pane_status == PaneStatus::Dead && process.pane_id.is_some() {
             self.tmux_context.kill_pane(process.pane_id.unwrap()).unwrap();
@@ -120,8 +129,12 @@ impl Controller {
 
         if process.pane_status == PaneStatus::Null  || process.pane_status == PaneStatus::Dead {
             let pane_id = self.tmux_context.create_pane(&process.command).unwrap();
-            self.state.set_pane_id(self.state.current_selection, Some(pane_id));
-            self.state.set_pane_running(self.state.current_selection);
+            state_mutation = state_mutation
+                .mark_current_pane_status(PaneStatus::Running)
+                .set_pane_id(Some(pane_id));
+            // self.state.set_pane_id(self.state.current_selection, Some(pane_id));
+            // self.state.set_pane_running(self.state.current_selection);
+            self.state = state_mutation.commit();
             return Some((
                 self.tmux_context.get_pane_pid(pane_id).unwrap(),
                 self.state.current_selection
@@ -141,7 +154,9 @@ impl Controller {
         if let Some(pane_id) = process.pane_id {
             let pane_pid = self.tmux_context.get_pane_pid(pane_id).unwrap();
             unsafe { libc::kill(pane_pid, libc::SIGKILL) };
-            self.state.set_process_halting(self.state.current_selection);
+            self.state = StateMutation::on(self.state.clone())
+                .mark_current_process_status(ProcessStatus::Halting)
+                .commit();
         }
     }
 }

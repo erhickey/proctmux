@@ -22,6 +22,38 @@ pub struct Process {
     pub pane_id: Option<usize>,
 }
 
+pub struct TmuxAddress {
+    pub session_name: String,
+    pub window: usize,
+    pub pane_id: usize,
+}
+pub struct TmuxAddressChange {
+    pub old_address: TmuxAddress,
+    pub new_address: TmuxAddress,
+}
+
+impl TmuxAddressChange {
+    pub fn new(old_address: TmuxAddress, new_address: TmuxAddress) -> Self {
+        TmuxAddressChange {
+            old_address,
+            new_address
+        }
+    }
+}
+
+impl TmuxAddress {
+    pub fn new(session_name: &str, 
+        window: usize, 
+        pane_id: usize) -> Self {
+        TmuxAddress {
+            session_name: session_name.to_string(),
+            window,
+            pane_id
+        }
+    }
+    
+}
+
 pub fn create_process(id: usize, label: &str, command: &str) -> Process {
     Process {
         id,
@@ -33,6 +65,7 @@ pub fn create_process(id: usize, label: &str, command: &str) -> Process {
     }
 }
 
+#[derive(Clone)]
 pub struct State {
     pub current_selection: usize,
     pub processes: Vec<Process>,
@@ -40,44 +73,73 @@ pub struct State {
 }
 
 impl State {
+
+}
+
+impl State {
     pub fn current_process(&self) -> &Process {
         &self.processes[self.current_selection]
     }
+}
 
-    pub fn next_process(&mut self) {
-        if self.current_selection >= self.processes.len() - 1 {
-            self.current_selection = 0;
-        } else {
-            self.current_selection += 1;
+pub struct StateMutation {
+    init_state: State,
+}
+impl StateMutation{
+    pub fn on(state: State) -> Self {
+        StateMutation{
+            init_state: state,
         }
     }
 
-    pub fn previous_process(&mut self) {
-        if self.current_selection == 0 {
-            self.current_selection = self.processes.len() - 1;
+    pub fn next_process(mut self) -> Self {
+        if self.init_state.current_selection >= self.init_state.processes.len() - 1 {
+            self.init_state.current_selection = 0;
         } else {
-            self.current_selection -= 1;
+            self.init_state.current_selection += 1;
         }
+        self
+    } 
+
+    pub fn previous_process(mut self) -> Self {
+        if self.init_state.current_selection == 0 {
+            self.init_state.current_selection = self.init_state.processes.len() - 1;
+        } else {
+            self.init_state.current_selection -= 1;
+        }
+        self
     }
 
-    pub fn set_process_running(&mut self, process_index: usize) {
-        self.processes[process_index].status = ProcessStatus::Running;
+    pub fn mark_current_process_status(mut self, status: ProcessStatus) -> Self {
+        self.init_state.processes[self.init_state.current_selection].status = status;
+        self
+    }   
+
+    pub fn mark_current_pane_status(mut self, status: PaneStatus) -> Self {
+        self.init_state.processes[self.init_state.current_selection].pane_status = status;
+        self
     }
 
-    pub fn set_process_halting(&mut self, process_index: usize) {
-        self.processes[process_index].status = ProcessStatus::Halting;
+    pub fn mark_process_status(mut self, status: ProcessStatus, idx: usize) -> Self {
+        self.init_state.processes[idx].status = status;
+        self
+    }   
+
+    pub fn mark_pane_status(mut self, status: PaneStatus, idx: usize) -> Self {
+        self.init_state.processes[idx].pane_status = status;
+        self
     }
 
-    pub fn set_process_halted(&mut self, process_index: usize) {
-        self.processes[process_index].status = ProcessStatus::Halted;
-        self.processes[process_index].pane_status = PaneStatus::Dead;
+
+    pub fn set_pane_id(mut self, pane_id: Option<usize>) -> Self {
+        self.init_state.processes[self.init_state.current_selection].pane_id = pane_id;
+        self
     }
 
-    pub fn set_pane_running(&mut self, process_index: usize) {
-        self.processes[process_index].pane_status = PaneStatus::Running;
-    }
-
-    pub fn set_pane_id(&mut self, process_index: usize, pane_id: Option<usize>) {
-        self.processes[process_index].pane_id = pane_id;
+    pub fn commit(self) -> State {
+        self.init_state
     }
 }
+
+
+

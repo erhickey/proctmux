@@ -1,6 +1,7 @@
 use std::io::Error;
 use std::process::Output;
 
+use crate::model::{TmuxAddressChange, TmuxAddress};
 use crate::tmux;
 
 pub struct TmuxContext {
@@ -52,7 +53,8 @@ impl TmuxContext {
         tmux::set_remain_on_exit(&self.session, self.window, false)
     }
 
-    pub fn break_pane(&self, source_pane: usize, dest_window: usize, window_label: &str) -> Result<Output, Error> {
+    pub fn break_pane(&self, source_pane: usize, dest_window: usize, window_label: &str) -> 
+    Result<(Output, TmuxAddressChange), Error> {
         tmux::break_pane(
             &self.session,
             self.window,
@@ -60,7 +62,23 @@ impl TmuxContext {
             &self.detached_session,
             dest_window,
             window_label)?;
-        tmux::set_remain_on_exit(&self.detached_session, dest_window, true)
+        let output = tmux::set_remain_on_exit(&self.detached_session, dest_window, true)?;
+        // TODO refactor this into a resuable function
+        let new_pane = match String::from_utf8(tmux::get_pane_by_session_and_window(&self.detached_session, self.window )?.stdout) {
+            Ok(val) => val.replace("\n", ""),
+            Err(e) => panic!("Error: Could not retrieve tmux pane id: {}", e)
+        };
+
+        let new_pane_id = match new_pane.parse() {
+            Ok(i) => i,
+            Err(e) => panic!("Error: Failed to parse tmux pane {}: {}", new_pane, e)
+        };
+        // ------
+        let address_change = TmuxAddressChange {
+            new_address: TmuxAddress::new(&self.detached_session.clone(), dest_window, source_pane),
+            old_address: TmuxAddress::new(&self.session, self.window, new_pane_id)
+        };
+        Ok((output, address_change))
     }
 
     pub fn join_pane(&self, target_window: usize) -> Result<usize, Error> {
