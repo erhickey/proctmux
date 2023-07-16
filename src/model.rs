@@ -12,25 +12,29 @@ pub enum PaneStatus {
     Dead = 3,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct TmuxAddress {
+    pub session_name: String,
+    pub window: usize,
+    pub pane_id: Option<usize>,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct TmuxAddressChange {
+    pub old_address: TmuxAddress,
+    pub new_address: TmuxAddress,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Process {
     pub id: usize,
     pub label: String,
     pub command: String,
     pub status: ProcessStatus,
     pub pane_status: PaneStatus,
-    pub pane_id: Option<usize>,
+    pub tmux_address: Option<TmuxAddress>,
 }
 
-pub struct TmuxAddress {
-    pub session_name: String,
-    pub window: usize,
-    pub pane_id: Option<usize>,
-}
-pub struct TmuxAddressChange {
-    pub old_address: TmuxAddress,
-    pub new_address: TmuxAddress,
-}
 
 impl TmuxAddressChange {
     pub fn new(old_address: TmuxAddress, new_address: TmuxAddress) -> Self {
@@ -61,7 +65,7 @@ pub fn create_process(id: usize, label: &str, command: &str) -> Process {
         command: command.to_string(),
         status: ProcessStatus::Halted,
         pane_status: PaneStatus::Null,
-        pane_id: None
+        tmux_address: None
     }
 }
 
@@ -131,8 +135,8 @@ impl StateMutation{
     }
 
 
-    pub fn set_pane_id(mut self, pane_id: Option<usize>) -> Self {
-        self.init_state.processes[self.init_state.current_selection].pane_id = pane_id;
+    pub fn set_tmux_address(mut self, addy: Option<TmuxAddress>) -> Self {
+        self.init_state.processes[self.init_state.current_selection].tmux_address = addy;
         self
     }
 

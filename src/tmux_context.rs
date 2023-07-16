@@ -9,7 +9,8 @@ pub struct TmuxContext {
     detached_session: String,
     session: String,
     window: usize,
-    pane: usize
+    picker_pane: usize,
+    active_proc_pane: usize,
 }
 
 pub fn create_tmux_context(detached_session: String) -> Result<TmuxContext, Box<dyn Error>> {
@@ -35,7 +36,8 @@ pub fn create_tmux_context(detached_session: String) -> Result<TmuxContext, Box<
         detached_session,
         session,
         window: window_id,
-        pane: pane_id,
+        picker_pane: pane_id,
+        active_proc_pane: pane_id + 1,
     })
 }
 
@@ -96,11 +98,11 @@ impl TmuxContext {
             target_window,
             &self.session,
             self.window,
-            self.pane, 
+            self.picker_pane
         )?;
 
         let address_change = TmuxAddressChange {
-            new_address: TmuxAddress::new(&self.session, target_window, Some(self.pane + 1)),
+            new_address: TmuxAddress::new(&self.session, target_window, Some(self.active_proc_pane)),
             old_address: TmuxAddress::new(&self.detached_session, self.window, None),
         };
         info!("Joining pane_id: {} to session: {}", 
@@ -115,11 +117,11 @@ impl TmuxContext {
         Ok(output)
     }
 
-    pub fn create_pane(&self, command: &str) -> Result<usize, Box<dyn Error>> {
-        let pane = tmux::create_pane(&self.session, self.window, self.pane, command)?;
+    pub fn create_pane(&self, command: &str) -> Result<TmuxAddress, Box<dyn Error>> {
+        let pane = tmux::create_pane(&self.session, self.window, self.picker_pane, command)?;
         let pane_id = parse_id(&String::from_utf8(pane.stdout)?)?;
         info!("creating pane: {}", pane_id);
-        Ok(pane_id)
+        Ok(TmuxAddress::new(&self.session, self.window, Some(self.active_proc_pane)))
     }
 
     pub fn get_pane_pid(&self, pane: usize) -> Result<i32, Box<dyn Error>> {
