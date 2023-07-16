@@ -15,9 +15,20 @@ use input::input_loop;
 use model::{State, create_process};
 use tmux_context::create_tmux_context;
 
+#[macro_use]
+extern crate log;
+
+use log::info;
+
 fn main() -> Result<(), Box<dyn Error>> {
+    let file = std::fs::File::create("/tmp/proctmux.log").unwrap();
+    env_logger::builder()
+        .target(env_logger::Target::Pipe(Box::new(file)))
+        .filter_level(log::LevelFilter::Trace)
+        .init();
     let config = parse_config_from_args()?;
     let tmux_context = create_tmux_context("proctmux background processes".to_string())?;
+    info!("Starting proctmux");
 
     let state = State {
         current_selection: 0,

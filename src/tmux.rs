@@ -24,11 +24,11 @@ pub fn current_pane() -> Result<Output, Error> {
             .output()
 }
 
-pub fn get_pane_by_session_and_window(session: &str, window: usize) -> Result<Output, Error> {
+pub fn get_current_pane_by_session(session: &str) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("display-message")
             .arg("-t")
-            .arg(format!("{}:{}", session, window))
+            .arg(format!("{}:", session))
             .arg("-p")
             .arg("#P")
             .output()

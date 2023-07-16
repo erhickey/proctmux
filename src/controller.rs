@@ -7,6 +7,7 @@ use crate::config::ProcTmuxConfig;
 use crate::draw::{draw_screen, init_screen, prepare_screen_for_exit};
 use crate::model::{PaneStatus, ProcessStatus, State, StateMutation};
 use crate::tmux_context::TmuxContext;
+use log::info;
 
 pub struct Controller {
     pub config: ProcTmuxConfig,
@@ -54,6 +55,7 @@ impl Controller {
     }
 
     pub fn on_keypress_down(&mut self) -> Result<(), Box<dyn Error>> {
+        info!("on_keypress_down");
         self.break_pane();
         self.state = StateMutation::on(self.state.clone()).next_process().commit();
         self.join_pane();
@@ -61,6 +63,7 @@ impl Controller {
     }
 
     pub fn on_keypress_up(&mut self) -> Result<(), Box<dyn Error>> {
+        info!("on_keypress_up");
         self.break_pane();
         self.state = StateMutation::on(self.state.clone()).previous_process().commit();
         self.join_pane();
@@ -92,12 +95,13 @@ impl Controller {
 
     pub fn break_pane(&mut self) {
         let process = self.state.current_process();
+        info!("inner break_pane status {:?} {:?}", process.pane_status, process.pane_id);
         if process.pane_status != PaneStatus::Null && process.pane_id.is_some() {
-            self.tmux_context
+            let address_change = self.tmux_context
                 .break_pane(process.pane_id.unwrap(), process.id, &process.label)
                 .unwrap();
             self.state = StateMutation::on(self.state.clone())
-                .set_pane_id(None)
+                .set_pane_id(address_change.new_address.pane_id)
                 .commit();
         }
     }
@@ -105,9 +109,9 @@ impl Controller {
     pub fn join_pane(&mut self) {
         let process = self.state.current_process();
         if process.pane_status != PaneStatus::Null {
-            let pane_id = self.tmux_context.join_pane(process.id).unwrap();
+            let address_change = self.tmux_context.join_pane(process.id).unwrap();
             self.state = StateMutation::on(self.state.clone())
-                .set_pane_id(Some(pane_id))
+                .set_pane_id(address_change.new_address.pane_id)
                 .commit();
         }
     }
@@ -125,6 +129,7 @@ impl Controller {
 
         if process.pane_status == PaneStatus::Dead && process.pane_id.is_some() {
             self.tmux_context.kill_pane(process.pane_id.unwrap()).unwrap();
+            // return None;
         }
 
         if process.pane_status == PaneStatus::Null  || process.pane_status == PaneStatus::Dead {
@@ -132,8 +137,6 @@ impl Controller {
             state_mutation = state_mutation
                 .mark_current_pane_status(PaneStatus::Running)
                 .set_pane_id(Some(pane_id));
-            // self.state.set_pane_id(self.state.current_selection, Some(pane_id));
-            // self.state.set_pane_running(self.state.current_selection);
             self.state = state_mutation.commit();
             return Some((
                 self.tmux_context.get_pane_pid(pane_id).unwrap(),

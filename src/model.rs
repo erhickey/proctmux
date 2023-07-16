@@ -1,11 +1,11 @@
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ProcessStatus {
     Running = 1,
     Halting = 2,
     Halted = 3,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum PaneStatus {
     Null = 1,
     Running = 2,
@@ -25,7 +25,7 @@ pub struct Process {
 pub struct TmuxAddress {
     pub session_name: String,
     pub window: usize,
-    pub pane_id: usize,
+    pub pane_id: Option<usize>,
 }
 pub struct TmuxAddressChange {
     pub old_address: TmuxAddress,
@@ -44,7 +44,7 @@ impl TmuxAddressChange {
 impl TmuxAddress {
     pub fn new(session_name: &str, 
         window: usize, 
-        pane_id: usize) -> Self {
+        pane_id: Option<usize>) -> Self {
         TmuxAddress {
             session_name: session_name.to_string(),
             window,
