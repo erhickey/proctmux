@@ -6,7 +6,7 @@ mod input;
 mod model;
 mod tmux;
 mod tmux_context;
-
+mod daemon;
 use std::error::Error;
 
 use args::parse_config_from_args;

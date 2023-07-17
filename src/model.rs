@@ -69,7 +69,7 @@ pub fn create_process(id: usize, label: &str, command: &str) -> Process {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct State {
     pub current_selection: usize,
     pub processes: Vec<Process>,
@@ -124,13 +124,27 @@ impl StateMutation{
         self
     }
 
-    pub fn mark_process_status(mut self, status: ProcessStatus, idx: usize) -> Self {
-        self.init_state.processes[idx].status = status;
+    pub fn mark_process_status(mut self, status: ProcessStatus, process_id: usize) -> Self {
+        self.init_state.processes = self.init_state.processes.iter()
+            .map(|p| {
+            let mut p = p.clone();
+            if p.id == process_id {
+                p.status= status.clone();
+            }
+            p
+        }).collect();
         self
     }   
 
-    pub fn mark_pane_status(mut self, status: PaneStatus, idx: usize) -> Self {
-        self.init_state.processes[idx].pane_status = status;
+    pub fn mark_pane_status(mut self, status: PaneStatus, process_id: usize) -> Self {
+        self.init_state.processes = self.init_state.processes.iter()
+            .map(|p| {
+            let mut p = p.clone();
+            if p.id == process_id {
+                p.pane_status = status.clone();
+            }
+            p
+        }).collect();
         self
     }
 
