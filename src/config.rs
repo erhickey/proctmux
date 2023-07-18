@@ -1,12 +1,24 @@
 use std::{collections::HashMap, env, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
+
 fn get_current_working_dir() -> std::io::Result<PathBuf> {
     env::current_dir()
 }
 
+
+fn default_general() -> GeneralConfig {
+    GeneralConfig {
+        detatched_session_name: default_detatched_session_name(), 
+        kill_existing_session: default_kill_existing_session(),
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct ProcTmuxConfig {
+
+    #[serde(default = "default_general")]
+    pub general: GeneralConfig,
     pub procs: HashMap<String, ProcessConfig>,
     pub keybinding: KeybindingConfig,
 }
@@ -94,6 +106,23 @@ pub struct ProcessConfig{
     pub categories: Option<Vec<String>>,
     pub meta_tags: Option<Vec<String>>
 }
+
+fn default_detatched_session_name() -> String {
+    "proctmux".to_string()
+}
+
+fn default_kill_existing_session() -> bool {
+    false
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct GeneralConfig{
+    #[serde(default = "default_detatched_session_name")]
+    pub detatched_session_name: String,
+    #[serde(default = "default_kill_existing_session")]
+    pub kill_existing_session: bool,
+}
+
 
 #[cfg(test)]
 mod tests {
