@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::error::Error;
 use std::process::Output;
 
@@ -13,7 +14,22 @@ pub struct TmuxContext {
     active_proc_pane: usize,
 }
 
-pub fn create_tmux_context(detached_session: String) -> Result<TmuxContext, Box<dyn Error>> {
+pub fn create_tmux_context(
+    detached_session: &str, 
+    kill_existing_session: bool 
+   ) -> Result<TmuxContext, Box<dyn Error>> {
+    let existing_session_names = String::from_utf8(tmux::list_sessions()?.stdout)?;
+    let existing_session_names: HashSet<_> = HashSet::from_iter(existing_session_names.split("\n"));
+
+    if existing_session_names.contains(detached_session){
+        if kill_existing_session {
+            info!("Killing existing session: {}", detached_session);
+            tmux::kill_session(detached_session)?;
+        } else {
+            return Err(format!("Session '{}' already exists", detached_session).into());
+        }
+    }
+
     let session = match String::from_utf8(tmux::current_session()?.stdout) {
         Ok(val) => clean_output(&val),
         Err(e) => panic!("Error: Could not retrieve tmux session id: {}", e),
@@ -33,7 +49,7 @@ pub fn create_tmux_context(detached_session: String) -> Result<TmuxContext, Box<
     info!("creating tmux context: session: {}, detached_session: {}, window_id: {}, pane_id: {}", session, detached_session, window_id, pane_id);
 
     Ok(TmuxContext {
-        detached_session,
+        detached_session: detached_session.to_string(),
         session,
         window: window_id,
         picker_pane: pane_id,
