@@ -24,6 +24,16 @@ pub fn current_pane() -> Result<Output, Error> {
             .output()
 }
 
+pub fn get_current_pane_by_session(session: &str) -> Result<Output, Error> {
+    Command::new("tmux")
+            .arg("display-message")
+            .arg("-t")
+            .arg(format!("{}:", session))
+            .arg("-p")
+            .arg("#P")
+            .output()
+}
+
 pub fn start_detached_session(session: &str) -> Result<Output, Error> {
     Command::new("tmux")
             .arg("new-session")

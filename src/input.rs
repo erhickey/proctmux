@@ -53,7 +53,7 @@ pub fn input_loop(controller: Controller) -> Result<(), Box<dyn Error>> {
 }
 
 fn watch_pid(controller: Arc<Mutex<Controller>>, pid: i32, process_index: usize) {
-    spawn(move || unsafe {
+    spawn(move || {
         let mut file = std::fs::File::create("/tmp/foo.txt").unwrap();
         use std::io::prelude::*;
         let l1 = format!("{}\n", pid);
