@@ -1,3 +1,5 @@
+general:
+  kill_existing_session: true
 layout:
   # hide or show the help window that show all keybindings and actions at the bottom of the screen
   hide_help: false

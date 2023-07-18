@@ -1,5 +1,12 @@
 use std::{io::Error, process::{Command, Output}};
 
+pub fn list_sessions() -> Result<Output, Error> {
+    Command::new("tmux")
+            .arg("list-sessions")
+            .arg("-F")
+            .arg("#{session_name}")
+            .output()
+}
 pub fn current_session() -> Result<Output, Error> {
     Command::new("tmux")
             .arg("display-message")
@@ -19,16 +26,6 @@ pub fn current_window() -> Result<Output, Error> {
 pub fn current_pane() -> Result<Output, Error> {
     Command::new("tmux")
             .arg("display-message")
-            .arg("-p")
-            .arg("#P")
-            .output()
-}
-
-pub fn get_current_pane_by_session(session: &str) -> Result<Output, Error> {
-    Command::new("tmux")
-            .arg("display-message")
-            .arg("-t")
-            .arg(format!("{}:", session))
             .arg("-p")
             .arg("#P")
             .output()

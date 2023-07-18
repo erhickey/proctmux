@@ -71,7 +71,7 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
         }
     }
 
-    for (ix, msg) in state.messages.iter().enumerate() {
+    for (ix, msg) in state.gui_state.messages.iter().enumerate() {
         let (_, height) = terminal_size()?;
         write!(
             stdout,

@@ -35,16 +35,6 @@ pub struct Process {
     pub tmux_address: Option<TmuxAddress>,
 }
 
-
-impl TmuxAddressChange {
-    pub fn new(old_address: TmuxAddress, new_address: TmuxAddress) -> Self {
-        TmuxAddressChange {
-            old_address,
-            new_address
-        }
-    }
-}
-
 impl TmuxAddress {
     pub fn new(session_name: &str, 
         window: usize, 
@@ -55,7 +45,6 @@ impl TmuxAddress {
             pane_id
         }
     }
-    
 }
 
 pub fn create_process(id: usize, label: &str, command: &str) -> Process {
@@ -70,32 +59,97 @@ pub fn create_process(id: usize, label: &str, command: &str) -> Process {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
+pub struct GUIState {
+    pub messages: Vec<String>,
+    pub filter_text: Option<String>,
+    pub entering_filter_text: bool,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct State {
     pub current_selection: usize,
     pub processes: Vec<Process>,
-    pub messages: Vec<String>
+    pub messages: Vec<String>,
+    pub gui_state: GUIState,
 }
 
 impl State {
-
-}
-
-impl State {
+    pub fn new(processes: Vec<Process>) -> Self {
+        State {
+            current_selection: 0,
+            processes,
+            messages: vec![],
+            gui_state: GUIState {
+                messages: vec![],
+                filter_text: None,
+                entering_filter_text: false,
+            },
+        }
+    }
     pub fn current_process(&self) -> &Process {
         &self.processes[self.current_selection]
     }
 }
 
-pub struct StateMutation {
-    init_state: State,
+pub trait Mutator<T> {
+    fn on(state: T) -> Self;
+    fn commit(self) -> T;
 }
-impl StateMutation{
-    pub fn on(state: State) -> Self {
+
+pub struct StateMutation {
+    init_state: State
+}
+
+pub struct GUIStateMutation {
+    init_state: GUIState
+}
+
+impl Mutator<GUIState> for GUIStateMutation {
+    fn on(state: GUIState) -> Self {
+        GUIStateMutation{
+            init_state: state,
+        }
+    }
+    fn commit(self) -> GUIState {
+        self.init_state
+    }
+}
+
+impl GUIStateMutation {
+    pub fn set_filter_text(mut self, text: Option<String>) -> Self {
+        self.init_state.filter_text = text;
+        self
+    }
+    pub fn start_entering_filter(mut self) -> Self {
+        self.init_state.entering_filter_text = true;
+        self
+    }
+    pub fn stop_entering_filter(mut self) -> Self {
+        self.init_state.entering_filter_text = false;
+        self
+    }
+    pub fn add_message(mut self, message: String) -> Self {
+        self.init_state.messages.push(message);
+        self
+    }
+    pub fn clear_messages(mut self) -> Self {
+        self.init_state.messages.clear();
+        self
+    }
+}
+
+impl Mutator<State> for StateMutation {
+    fn on(state: State) -> Self {
         StateMutation{
             init_state: state,
         }
     }
+    fn commit(self) -> State {
+        self.init_state
+    }
+}
 
+impl StateMutation {
     pub fn next_process(mut self) -> Self {
         if self.init_state.current_selection >= self.init_state.processes.len() - 1 {
             self.init_state.current_selection = 0;
@@ -148,16 +202,18 @@ impl StateMutation{
         self
     }
 
-
     pub fn set_tmux_address(mut self, addy: Option<TmuxAddress>) -> Self {
         self.init_state.processes[self.init_state.current_selection].tmux_address = addy;
         self
     }
 
-    pub fn commit(self) -> State {
-        self.init_state
+    pub fn set_gui_state(mut self, gui_state: GUIState) -> Self {
+        self.init_state.gui_state = gui_state;
+        self
     }
+
 }
+
 
 
 
