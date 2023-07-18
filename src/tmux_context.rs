@@ -1,87 +1,18 @@
 use std::collections::HashSet;
 use std::error::Error;
-use std::io::Write;
-use std::process::{ChildStderr, ChildStdin, ChildStdout, Output};
+use std::process::Output;
+
+use log::info;
 
 use crate::model::{TmuxAddress, TmuxAddressChange};
 use crate::tmux;
 
-use log::info;
 pub struct TmuxContext {
-    detached_session: String,
-    session: String,
+    pub detached_session: String,
+    pub session: String,
     window: usize,
     picker_pane: usize,
     active_proc_pane: usize,
-    command_mode_attached: TmuxCommandModeStreams,
-    command_mode_detached: TmuxCommandModeStreams,
-}
-
-pub struct TmuxCommandModeStreams {
-    input: ChildStdin,
-    out: ChildStdout,
-    err: ChildStderr,
-}
-
-pub fn create_tmux_context(
-    detached_session: &str, 
-    kill_existing_session: bool 
-   ) -> Result<TmuxContext, Box<dyn Error>> {
-    let existing_session_names = String::from_utf8(tmux::list_sessions()?.stdout)?;
-    let existing_session_names: HashSet<_> = HashSet::from_iter(existing_session_names.split("\n"));
-
-    if existing_session_names.contains(detached_session){
-        if kill_existing_session {
-            info!("Killing existing session: {}", detached_session);
-            tmux::kill_session(detached_session)?;
-        } else {
-            return Err(format!("Session '{}' already exists", detached_session).into());
-        }
-    }
-
-    let session = match String::from_utf8(tmux::current_session()?.stdout) {
-        Ok(val) => clean_output(&val),
-        Err(e) => panic!("Error: Could not retrieve tmux session id: {}", e),
-    };
-    let window = match String::from_utf8(tmux::current_window()?.stdout) {
-        Ok(val) => clean_output(&val),
-        Err(e) => panic!("Error: Could not retrieve tmux window id: {}", e),
-    };
-    let pane = match String::from_utf8(tmux::current_pane()?.stdout) {
-        Ok(val) => clean_output(&val),
-        Err(e) => panic!("Error: Could not retrieve tmux pane id: {}", e),
-    };
-
-    let window_id = parse_id(&window)?;
-    let pane_id = parse_id(&pane)?;
-    info!(
-        "creating tmux context: session: {}, detached_session: {}, window_id: {}, pane_id: {}",
-        session,
-        detached_session,
-        window_id,
-        pane_id
-    );
-
-    let (a_in, a_out, a_err) = tmux::command_mode_streams(&session)?;
-    let (d_in, d_out, d_err) = tmux::command_mode_streams(&detached_session)?;
-
-    Ok(TmuxContext {
-        detached_session: detached_session.to_string(),
-        session,
-        window: window_id,
-        picker_pane: pane_id,
-        active_proc_pane: pane_id + 1,
-        command_mode_attached: TmuxCommandModeStreams {
-            input: a_in,
-            out: a_out,
-            err: a_err
-        },
-        command_mode_detached: TmuxCommandModeStreams {
-            input: d_in,
-            out: d_out,
-            err: d_err
-        },
-    })
 }
 
 fn clean_output(s: &str) -> String {
@@ -101,8 +32,55 @@ fn parse_pid(pid: &str) -> Result<i32, Box<dyn Error>> {
 }
 
 impl TmuxContext {
+    pub fn new(detached_session: &str, kill_existing_session: bool) -> Result<Self, Box<dyn Error>> {
+        let existing_session_names = String::from_utf8(tmux::list_sessions()?.stdout)?;
+        let existing_session_names: HashSet<_> = HashSet::from_iter(existing_session_names.split("\n"));
+
+        if existing_session_names.contains(detached_session){
+            if kill_existing_session {
+                info!("Killing existing session: {}", detached_session);
+                tmux::kill_session(detached_session)?;
+                tmux::start_detached_session(detached_session)?;
+            } else {
+                return Err(format!("Session '{}' already exists", detached_session).into());
+            }
+        } else {
+            tmux::start_detached_session(detached_session)?;
+        }
+
+        let session = match String::from_utf8(tmux::current_session()?.stdout) {
+            Ok(val) => clean_output(&val),
+            Err(e) => panic!("Error: Could not retrieve tmux session id: {}", e),
+        };
+        let window = match String::from_utf8(tmux::current_window()?.stdout) {
+            Ok(val) => clean_output(&val),
+            Err(e) => panic!("Error: Could not retrieve tmux window id: {}", e),
+        };
+        let pane = match String::from_utf8(tmux::current_pane()?.stdout) {
+            Ok(val) => clean_output(&val),
+            Err(e) => panic!("Error: Could not retrieve tmux pane id: {}", e),
+        };
+
+        let window_id = parse_id(&window)?;
+        let pane_id = parse_id(&pane)?;
+        info!(
+            "creating tmux context: session: {}, detached_session: {}, window_id: {}, pane_id: {}",
+            session,
+            detached_session,
+            window_id,
+            pane_id
+        );
+
+        Ok(TmuxContext {
+            detached_session: detached_session.to_string(),
+            session,
+            window: window_id,
+            picker_pane: pane_id,
+            active_proc_pane: pane_id + 1,
+        })
+    }
+
     pub fn prepare(&self) -> Result<Output, Box<dyn Error>> {
-        tmux::start_detached_session(&self.detached_session)?;
         Ok(tmux::set_remain_on_exit(&self.session, self.window, true)?)
     }
 
@@ -176,11 +154,5 @@ impl TmuxContext {
     pub fn get_pane_pid(&self, pane: usize) -> Result<i32, Box<dyn Error>> {
         let pid = tmux::get_pane_pid(&self.session, self.window, pane)?;
         Ok(parse_pid(&String::from_utf8(pid.stdout)?)?)
-    }
-
-    pub fn subscribe_to_pane_dead_notifications(&mut self) -> std::io::Result<()> {
-        let cmd = "refresh-client -B pane_dead_notification:%*:\"#{pane_dead} #S:#I.#P #{pane_pid}\"";
-        self.command_mode_detached.input.write_all(cmd.as_bytes())?;
-        self.command_mode_attached.input.write_all(cmd.as_bytes())
     }
 }

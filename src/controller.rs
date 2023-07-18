@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io::Stdout;
 
+use log::info;
 use termion::raw::RawTerminal;
 
 use crate::config::ProcTmuxConfig;
 use crate::draw::{draw_screen, init_screen, prepare_screen_for_exit};
 use crate::model::{PaneStatus, ProcessStatus, State, StateMutation, GUIStateMutation, Mutator};
 use crate::tmux_context::TmuxContext;
-use log::info;
 
 pub struct Controller {
     pub config: ProcTmuxConfig,
@@ -17,20 +17,20 @@ pub struct Controller {
     stdout: RawTerminal<Stdout>,
 }
 
-pub fn create_controller(
-    config: ProcTmuxConfig,
-    state: State,
-    tmux_context: TmuxContext,
-) -> Result<Controller, Box<dyn Error>> {
-    Ok(Controller {
-        config,
-        state,
-        tmux_context,
-        stdout: init_screen()?,
-    })
-}
-
 impl Controller {
+    pub fn new(
+        config: ProcTmuxConfig,
+        state: State,
+        tmux_context: TmuxContext,
+    ) -> Result<Self, Box<dyn Error>> {
+        Ok(Controller {
+            config,
+            state,
+            tmux_context,
+            stdout: init_screen()?,
+        })
+    }
+
     fn draw_screen(&self) -> Result<(), Box<dyn Error>> {
         draw_screen(&self.stdout, &self.state)
     }

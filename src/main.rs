@@ -6,19 +6,23 @@ mod input;
 mod model;
 mod tmux;
 mod tmux_context;
+mod tmux_daemon;
 mod daemon;
+
 use std::error::Error;
+use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
+
+use log::info;
 
 use args::parse_config_from_args;
-use controller::create_controller;
+use controller::Controller;
 use input::input_loop;
 use model::{Process, State};
-use tmux_context::create_tmux_context;
+use tmux_context::TmuxContext;
 
 #[macro_use]
 extern crate log;
-
-use log::info;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let file = std::fs::File::create("/tmp/proctmux.log").unwrap();
@@ -26,11 +30,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .target(env_logger::Target::Pipe(Box::new(file)))
         .filter_level(log::LevelFilter::Trace)
         .init();
+
     let config = parse_config_from_args()?;
 
-    let tmux_context = create_tmux_context(
+    let tmux_context = TmuxContext::new(
         &config.general.detatched_session_name,
-        config.general.kill_existing_session)?;
+        config.general.kill_existing_session
+    )?;
+
     info!("Starting proctmux");
 
     let state = State::new(
@@ -45,6 +52,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         ]
     );
 
-    input_loop(create_controller(config, state, tmux_context)?)?;
+    let (tx, rx) = channel();
+
+    std::thread::spawn(move || {
+        for line in rx {
+            info!("channel: {}", line);
+        }
+    });
+
+    tmux_daemon::watch_for_dead_panes(&tmux_context.session, tx.clone())?;
+    tmux_daemon::watch_for_dead_panes(&tmux_context.detached_session, tx)?;
+
+    let controller = Arc::new(Mutex::new(Controller::new(config, state, tmux_context)?));
+    input_loop(controller.clone())?;
+
     Ok(())
 }
