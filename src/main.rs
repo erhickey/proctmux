@@ -27,12 +27,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         .filter_level(log::LevelFilter::Trace)
         .init();
     let config = parse_config_from_args()?;
-    let tmux_context = create_tmux_context("proctmux background processes".to_string())?;
+
+    let tmux_context = create_tmux_context(
+        &config.general.detatched_session_name,
+        config.general.kill_existing_session)?;
     info!("Starting proctmux");
 
-    let state = State {
-        current_selection: 0,
-        processes: vec![
+    let state = State::new(vec![
             create_process(1, "Simple Echo", "echo hi"),
             create_process(
                 2,
@@ -40,9 +41,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "for i in `seq 1 10`; do echo $i; sleep 2 ; done",
             ),
             create_process(3, "vim", "vim"),
-        ],
-        messages: vec![]
-    };
+        ]);
 
     input_loop(create_controller(config, state, tmux_context)?)?;
     Ok(())

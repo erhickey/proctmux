@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::Stdout;
-use std::iter::Map;
 
 use termion::raw::RawTerminal;
 
 use crate::config::ProcTmuxConfig;
 use crate::draw::{draw_screen, init_screen, prepare_screen_for_exit};
-use crate::model::{PaneStatus, ProcessStatus, State, StateMutation};
+use crate::model::{PaneStatus, ProcessStatus, State, StateMutation, GUIStateMutation, Mutator};
 use crate::tmux_context::TmuxContext;
 use log::info;
 
@@ -83,7 +82,12 @@ impl Controller {
     }
 
     pub fn on_error(&mut self, err: Box<dyn Error>) {
-        self.state.messages.push(format!("{}", err));
+        let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
+            .add_message(format!("{}", err))
+            .commit();
+        self.state = StateMutation::on(self.state.clone())
+            .set_gui_state(gui_state)
+            .commit();
     }
 
     pub fn on_keypress_start(&mut self) -> Result<Option<(i32, usize)>, Box<dyn Error>> {
