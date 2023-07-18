@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::io::Stdout;
+use std::iter::Map;
 
 use termion::raw::RawTerminal;
 
@@ -103,6 +105,24 @@ impl Controller {
         self.draw_screen()
     }
 
+    pub fn get_processes_to_pid(&self) -> HashMap<usize, Option<i32>> {
+        let m: HashMap<_,_>= self.state.processes.iter().map(|process| {
+            if process.status == ProcessStatus::Halted {
+                return (process.id, None)
+            }
+            if let Some(addy) = &process.tmux_address {
+                if let Some(pane_id) = addy.pane_id {
+                    if let Ok(pid) = self.tmux_context.get_pane_pid(pane_id) {
+                        return (process.id, Some(pid))
+                    }
+                } 
+            }
+            (process.id, None)
+        }).collect();
+        info!("get_processes_to_pid: {:?}", m);
+        m
+    }
+
     pub fn break_pane(&mut self) {
         let process = self.state.current_process();
         if process.pane_status != PaneStatus::Null {
@@ -132,7 +152,6 @@ impl Controller {
 
     pub fn start_process(&mut self) -> Option<(i32, usize)> {
         let process = self.state.current_process().clone();
-
         if process.status != ProcessStatus::Halted {
             return None;
         }
@@ -146,7 +165,6 @@ impl Controller {
                     self.tmux_context.kill_pane(pane_id).unwrap();
                 }
             }
-            // return None;
         }
 
         if process.pane_status == PaneStatus::Null || process.pane_status == PaneStatus::Dead {
