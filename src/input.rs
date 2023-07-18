@@ -1,10 +1,7 @@
 use std::error::Error;
 use std::io::stdin;
-use std::process::Command;
 use std::sync::{Arc, Mutex};
-use std::thread::spawn;
 
-use sysinfo::{Pid, PidExt, System, SystemExt};
 use termion::{event::Key, input::TermRead};
 
 use crate::config::KeybindingConfig;
@@ -38,8 +35,8 @@ pub fn input_loop(controller: Controller) -> Result<(), Box<dyn Error>> {
 
 fn handle_filter_enter_key_press() {
     // TODO - this is a stub
-
 }
+
 fn handle_normal_mode_keypresses(
     am_controller: Arc<Mutex<Controller>>,
     pressed_key: Result<Key, std::io::Error>,

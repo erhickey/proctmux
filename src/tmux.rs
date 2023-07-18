@@ -1,4 +1,5 @@
-use std::{io::Error, process::{Command, Output}};
+use std::io::{Error, ErrorKind};
+use std::process::{ChildStderr, ChildStdin, ChildStdout, Command, Stdio, Output};
 
 pub fn list_sessions() -> Result<Output, Error> {
     Command::new("tmux")
@@ -130,4 +131,30 @@ pub fn get_pane_pid(session: &str, window: usize, pane: usize) -> Result<Output,
         .arg(format!("{}:{}.{}", session, window, pane))
         .arg("#{pane_pid}")
         .output()
+}
+
+pub fn command_mode_streams(session: &str) -> Result<(ChildStdin, ChildStdout, ChildStderr), Error> {
+    let cmd = Command::new("tmux")
+        .arg("-C")
+        .arg("attach-session")
+        .arg("-t")
+        .arg(session)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    if let Some(stdin) = cmd.stdin {
+        if let Some(stdout) = cmd.stdout {
+            if let Some(stderr) = cmd.stderr {
+                Ok((stdin, stdout, stderr))
+            } else {
+                Err(Error::new(ErrorKind::Other, "Error getting stderr for tmux command mode process"))
+            }
+        } else {
+            Err(Error::new(ErrorKind::Other, "Error getting stdout for tmux command mode process"))
+        }
+    } else {
+        Err(Error::new(ErrorKind::Other, "Error getting stdin for tmux command mode process"))
+    }
 }

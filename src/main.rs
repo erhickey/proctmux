@@ -12,7 +12,7 @@ use std::error::Error;
 use args::parse_config_from_args;
 use controller::create_controller;
 use input::input_loop;
-use model::{State, create_process};
+use model::{Process, State};
 use tmux_context::create_tmux_context;
 
 #[macro_use]
@@ -33,15 +33,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.general.kill_existing_session)?;
     info!("Starting proctmux");
 
-    let state = State::new(vec![
-            create_process(1, "Simple Echo", "echo hi"),
-            create_process(
+    let state = State::new(
+        vec![
+            Process::new(1, "Simple Echo", "echo hi"),
+            Process::new(
                 2,
                 "Echo x10",
-                "for i in `seq 1 10`; do echo $i; sleep 2 ; done",
+                "for i in `seq 1 3`; do echo $i; sleep 1 ; done",
             ),
-            create_process(3, "vim", "vim"),
-        ]);
+            Process::new(3, "vim", "vim"),
+        ]
+    );
 
     input_loop(create_controller(config, state, tmux_context)?)?;
     Ok(())
