@@ -53,16 +53,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         ]
     );
 
-    let (tx, rx) = channel();
+    let (sender, receiver) = channel();
 
     std::thread::spawn(move || {
-        for line in rx {
+        for line in receiver {
             info!("tmux daemon channel: {}", line);
         }
     });
 
     let mut tmux_daemon = TmuxDaemon::new()?;
-    tmux_daemon.listen_for_dead_panes(tx)?;
+    tmux_daemon.listen_for_dead_panes(sender)?;
 
     let controller = Arc::new(Mutex::new(Controller::new(config, state, tmux_context)?));
     input_loop(controller.clone())?;

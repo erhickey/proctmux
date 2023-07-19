@@ -1,9 +1,8 @@
 use std::error::Error;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout};
+use std::process::{Child, ChildStdin, ChildStdout, ExitStatus};
 use std::sync::mpsc::Sender;
-use std::thread::{sleep, spawn};
-use std::time;
+use std::thread::spawn;
 
 use crate::tmux;
 
@@ -27,13 +26,13 @@ impl TmuxDaemon {
     }
 
     fn subscribe_to_pane_dead_notifications(&mut self) -> std::io::Result<()> {
-        let cmd = "refresh-client -B pane_dead_notification:%*:\"#{pane_dead} #S:#I.#P #{pane_pid}\"";
+        let cmd = "refresh-client -B pane_dead_notification:%*:\"#{pane_dead} #S:#I.#P #{pane_pid}\"\n";
         self.stdin.write_all(cmd.as_bytes())
     }
 
-    pub fn kill(&mut self) -> std::io::Result<()> {
-        self.stdin.write_all(b"kill-session")?;
-        self.process.kill()
+    pub fn kill(&mut self) -> std::io::Result<ExitStatus> {
+        self.stdin.write_all(b"kill-session\n")?;
+        self.process.wait()  // make sure stdin is closed
     }
 
     pub fn listen_for_dead_panes(&mut self, sender: Sender<String>) -> Result<(), Box<dyn Error>> {
@@ -45,12 +44,7 @@ impl TmuxDaemon {
                 let mut buf = String::new();
                 match buf_reader.read_line(&mut buf) {
                     Ok(_) => {
-                        if buf == "" {
-                            sender.send("shit".to_string()).unwrap();
-                            sleep(time::Duration::from_millis(100));
-                        } else {
-                            sender.send(buf).unwrap();
-                        }
+                        sender.send(buf).unwrap();
                     },
                     _ => return
                 }
