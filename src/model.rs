@@ -13,19 +13,6 @@ pub enum PaneStatus {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct TmuxAddress {
-    pub session_name: String,
-    pub window: usize,
-    pub pane_id: Option<usize>,
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct TmuxAddressChange {
-    pub old_address: TmuxAddress,
-    pub new_address: TmuxAddress,
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Process {
     pub id: usize,
     pub label: String,
@@ -35,26 +22,43 @@ pub struct Process {
     pub tmux_address: Option<TmuxAddress>,
 }
 
+impl Process {
+    pub fn new(id: usize, label: &str, command: &str) -> Self {
+        Process {
+            id,
+            label: label.to_string(),
+            command: command.to_string(),
+            status: ProcessStatus::Halted,
+            pane_status: PaneStatus::Null,
+            tmux_address: None
+        }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct TmuxAddressChange {
+    pub old_address: TmuxAddress,
+    pub new_address: TmuxAddress,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct TmuxAddress {
+    pub session_name: String,
+    pub window: usize,
+    pub pane_id: Option<usize>,
+}
+
 impl TmuxAddress {
-    pub fn new(session_name: &str, 
-        window: usize, 
-        pane_id: Option<usize>) -> Self {
+    pub fn new(
+        session_name: &str,
+        window: usize,
+        pane_id: Option<usize>
+    ) -> Self {
         TmuxAddress {
             session_name: session_name.to_string(),
             window,
             pane_id
         }
-    }
-}
-
-pub fn create_process(id: usize, label: &str, command: &str) -> Process {
-    Process {
-        id,
-        label: label.to_string(),
-        command: command.to_string(),
-        status: ProcessStatus::Halted,
-        pane_status: PaneStatus::Null,
-        tmux_address: None
     }
 }
 
@@ -86,6 +90,7 @@ impl State {
             },
         }
     }
+
     pub fn current_process(&self) -> &Process {
         &self.processes[self.current_selection]
     }
@@ -110,6 +115,7 @@ impl Mutator<GUIState> for GUIStateMutation {
             init_state: state,
         }
     }
+
     fn commit(self) -> GUIState {
         self.init_state
     }
@@ -120,18 +126,22 @@ impl GUIStateMutation {
         self.init_state.filter_text = text;
         self
     }
+
     pub fn start_entering_filter(mut self) -> Self {
         self.init_state.entering_filter_text = true;
         self
     }
+
     pub fn stop_entering_filter(mut self) -> Self {
         self.init_state.entering_filter_text = false;
         self
     }
+
     pub fn add_message(mut self, message: String) -> Self {
         self.init_state.messages.push(message);
         self
     }
+
     pub fn clear_messages(mut self) -> Self {
         self.init_state.messages.clear();
         self
@@ -144,6 +154,7 @@ impl Mutator<State> for StateMutation {
             init_state: state,
         }
     }
+
     fn commit(self) -> State {
         self.init_state
     }
@@ -157,7 +168,7 @@ impl StateMutation {
             self.init_state.current_selection += 1;
         }
         self
-    } 
+    }
 
     pub fn previous_process(mut self) -> Self {
         if self.init_state.current_selection == 0 {
@@ -171,7 +182,7 @@ impl StateMutation {
     pub fn mark_current_process_status(mut self, status: ProcessStatus) -> Self {
         self.init_state.processes[self.init_state.current_selection].status = status;
         self
-    }   
+    }
 
     pub fn mark_current_pane_status(mut self, status: PaneStatus) -> Self {
         self.init_state.processes[self.init_state.current_selection].pane_status = status;
@@ -188,7 +199,7 @@ impl StateMutation {
             p
         }).collect();
         self
-    }   
+    }
 
     pub fn mark_pane_status(mut self, status: PaneStatus, process_id: usize) -> Self {
         self.init_state.processes = self.init_state.processes.iter()
@@ -211,9 +222,4 @@ impl StateMutation {
         self.init_state.gui_state = gui_state;
         self
     }
-
 }
-
-
-
-

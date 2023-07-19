@@ -1,4 +1,5 @@
-use std::{io::Error, process::{Command, Output}};
+use std::io::Error;
+use std::process::{Child, Command, Stdio, Output};
 
 pub fn list_sessions() -> Result<Output, Error> {
     Command::new("tmux")
@@ -130,4 +131,13 @@ pub fn get_pane_pid(session: &str, window: usize, pane: usize) -> Result<Output,
         .arg(format!("{}:{}.{}", session, window, pane))
         .arg("#{pane_pid}")
         .output()
+}
+
+pub fn command_mode() -> Result<Child, Error> {
+    Command::new("tmux")
+        .arg("-C")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
 }

@@ -6,19 +6,24 @@ mod input;
 mod model;
 mod tmux;
 mod tmux_context;
+mod tmux_daemon;
 mod daemon;
+
 use std::error::Error;
+use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
+
+use log::info;
 
 use args::parse_config_from_args;
-use controller::create_controller;
+use controller::Controller;
 use input::input_loop;
-use model::{State, create_process};
-use tmux_context::create_tmux_context;
+use model::{Process, State};
+use tmux_context::TmuxContext;
+use tmux_daemon::TmuxDaemon;
 
 #[macro_use]
 extern crate log;
-
-use log::info;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let file = std::fs::File::create("/tmp/proctmux.log").unwrap();
@@ -26,23 +31,43 @@ fn main() -> Result<(), Box<dyn Error>> {
         .target(env_logger::Target::Pipe(Box::new(file)))
         .filter_level(log::LevelFilter::Trace)
         .init();
+
     let config = parse_config_from_args()?;
 
-    let tmux_context = create_tmux_context(
+    let tmux_context = TmuxContext::new(
         &config.general.detatched_session_name,
-        config.general.kill_existing_session)?;
+        config.general.kill_existing_session
+    )?;
+
     info!("Starting proctmux");
 
-    let state = State::new(vec![
-            create_process(1, "Simple Echo", "echo hi"),
-            create_process(
+    let state = State::new(
+        vec![
+            Process::new(1, "Simple Echo", "echo hi"),
+            Process::new(
                 2,
                 "Echo x10",
-                "for i in `seq 1 10`; do echo $i; sleep 2 ; done",
+                "for i in `seq 1 3`; do echo $i; sleep 1 ; done",
             ),
-            create_process(3, "vim", "vim"),
-        ]);
+            Process::new(3, "vim", "vim"),
+        ]
+    );
 
-    input_loop(create_controller(config, state, tmux_context)?)?;
+    let (tx, rx) = channel();
+
+    std::thread::spawn(move || {
+        for line in rx {
+            info!("tmux daemon channel: {}", line);
+        }
+    });
+
+    let mut tmux_daemon = TmuxDaemon::new()?;
+    tmux_daemon.listen_for_dead_panes(tx)?;
+
+    let controller = Arc::new(Mutex::new(Controller::new(config, state, tmux_context)?));
+    input_loop(controller.clone())?;
+
+    tmux_daemon.kill()?;
+
     Ok(())
 }
