@@ -20,6 +20,7 @@ use controller::Controller;
 use input::input_loop;
 use model::{Process, State};
 use tmux_context::TmuxContext;
+use tmux_daemon::TmuxDaemon;
 
 #[macro_use]
 extern crate log;
@@ -56,15 +57,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     std::thread::spawn(move || {
         for line in rx {
-            info!("channel: {}", line);
+            info!("tmux daemon channel: {}", line);
         }
     });
 
-    tmux_daemon::watch_for_dead_panes(&tmux_context.session, tx.clone())?;
-    tmux_daemon::watch_for_dead_panes(&tmux_context.detached_session, tx)?;
+    let mut tmux_daemon = TmuxDaemon::new()?;
+    tmux_daemon.listen_for_dead_panes(tx)?;
 
     let controller = Arc::new(Mutex::new(Controller::new(config, state, tmux_context)?));
     input_loop(controller.clone())?;
+
+    tmux_daemon.kill()?;
 
     Ok(())
 }
