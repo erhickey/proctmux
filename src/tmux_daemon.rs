@@ -34,7 +34,10 @@ impl TmuxDaemon {
 
     fn subscribe_to_pane_dead_notifications(&mut self) -> std::io::Result<()> {
         info!("Subscribing to pane dead notifications (Session: {})", self.session);
-        let cmd = "refresh-client -B pane_dead_notification:%*:\"#{pane_dead} #{pane_pid}\"\n";
+        let cmd = format!(
+            "refresh-client -B pane_dead_notification_{}:%*:\"#{{pane_dead}} #{{pane_pid}}\"\n",
+            self.session
+        );
         self.stdin.write_all(cmd.as_bytes())
     }
 
@@ -69,7 +72,7 @@ impl TmuxDaemon {
 }
 
 fn parse_pane_dead_notification(line: String) -> Option<i32> {
-    if line.starts_with("%subscription-changed pane_dead_notification ") {
+    if line.starts_with("%subscription-changed pane_dead_notification_") {
         let ss: Vec<&str> = line.split(' ').collect();
         if ss[ss.len() - 2] == "1" {
             return ss[ss.len() - 1].trim().parse().ok();
