@@ -17,6 +17,7 @@ use log::info;
 
 use args::parse_config_from_args;
 use controller::Controller;
+use daemon::receive_dead_pids;
 use input::input_loop;
 use model::{Process, State};
 use tmux_context::TmuxContext;
@@ -32,14 +33,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .filter_level(log::LevelFilter::Trace)
         .init();
 
+    info!("Starting proctmux");
+
     let config = parse_config_from_args()?;
 
     let tmux_context = TmuxContext::new(
         &config.general.detatched_session_name,
         config.general.kill_existing_session
     )?;
-
-    info!("Starting proctmux");
 
     let state = State::new(
         vec![
@@ -53,21 +54,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         ]
     );
 
-    let (tx, rx) = channel();
+    let (sender, receiver) = channel();
 
-    std::thread::spawn(move || {
-        for line in rx {
-            info!("tmux daemon channel: {}", line);
-        }
-    });
-
-    let mut tmux_daemon = TmuxDaemon::new()?;
-    tmux_daemon.listen_for_dead_panes(tx)?;
+    let mut tmux_daemon_attached = TmuxDaemon::new(&tmux_context.session)?;
+    tmux_daemon_attached.listen_for_dead_panes(sender.clone())?;
+    let mut tmux_daemon_detached = TmuxDaemon::new(&tmux_context.detached_session)?;
+    tmux_daemon_detached.listen_for_dead_panes(sender)?;
 
     let controller = Arc::new(Mutex::new(Controller::new(config, state, tmux_context)?));
+    controller.lock().unwrap().on_startup()?;
+
+    receive_dead_pids(receiver, controller.clone());
     input_loop(controller.clone())?;
 
-    tmux_daemon.kill()?;
+    tmux_daemon_attached.kill()?;
+    tmux_daemon_detached.kill()?;
+    controller.lock().unwrap().on_exit()?;
 
     Ok(())
 }

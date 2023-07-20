@@ -133,11 +133,13 @@ pub fn get_pane_pid(session: &str, window: usize, pane: usize) -> Result<Output,
         .output()
 }
 
-pub fn command_mode() -> Result<Child, Error> {
+pub fn command_mode(session: &str) -> Result<Child, Error> {
     Command::new("tmux")
         .arg("-C")
+        .arg("attach-session")
+        .arg("-t")
+        .arg(session)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
         .spawn()
 }
