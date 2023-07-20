@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::error::Error;
 use std::io::Stdout;
 
@@ -42,6 +41,7 @@ impl Controller {
     }
 
     pub fn on_exit(&self) -> Result<(), Box<dyn Error>> {
+        self.tmux_context.cleanup()?;
         prepare_screen_for_exit(&self.stdout)
     }
 
@@ -57,7 +57,6 @@ impl Controller {
                     }
                 }
             });
-        self.tmux_context.cleanup()?;
         Ok(())
     }
 
@@ -101,30 +100,43 @@ impl Controller {
         self.draw_screen()
     }
 
-    pub fn on_process_terminated(&mut self, process_index: usize) -> Result<(), Box<dyn Error>> {
-        self.state = StateMutation::on(self.state.clone())
-            .mark_process_status(ProcessStatus::Halted, process_index)
-            .mark_pane_status(PaneStatus::Dead, process_index)
-            .commit();
-        self.draw_screen()
-    }
+    // pub fn on_process_terminated(&mut self, process_index: usize) -> Result<(), Box<dyn Error>> {
+    //     self.state = StateMutation::on(self.state.clone())
+    //         .mark_process_status(ProcessStatus::Halted, process_index)
+    //         .mark_pane_status(PaneStatus::Dead, process_index)
+    //         .commit();
+    //     self.draw_screen()
+    // }
 
-    pub fn get_processes_to_pid(&self) -> HashMap<usize, Option<i32>> {
-        let m: HashMap<_,_>= self.state.processes.iter().map(|process| {
-            if process.status == ProcessStatus::Halted {
-                return (process.id, None)
-            }
-            if let Some(addy) = &process.tmux_address {
-                if let Some(pane_id) = addy.pane_id {
-                    if let Ok(pid) = self.tmux_context.get_pane_pid(pane_id) {
-                        return (process.id, Some(pid))
-                    }
-                } 
-            }
-            (process.id, None)
-        }).collect();
-        info!("get_processes_to_pid: {:?}", m);
-        m
+    // pub fn get_processes_to_pid(&self) -> HashMap<usize, Option<i32>> {
+    //     let m: HashMap<_,_>= self.state.processes.iter().map(|process| {
+    //         if process.status == ProcessStatus::Halted {
+    //             return (process.id, None)
+    //         }
+    //         if let Some(addy) = &process.tmux_address {
+    //             if let Some(pane_id) = addy.pane_id {
+    //                 if let Ok(pid) = self.tmux_context.get_pane_pid(pane_id) {
+    //                     return (process.id, Some(pid))
+    //                 }
+    //             } 
+    //         }
+    //         (process.id, None)
+    //     }).collect();
+    //     info!("get_processes_to_pid: {:?}", m);
+    //     m
+    // }
+
+    pub fn on_pid_terminated(&mut self, pid: i32) -> Result<(), Box<dyn Error>> {
+        info!("on_pid_terminated: {}", pid);
+        if let Some(process) = self.state.processes.iter().find(|p| p.pid == Some(pid)) {
+            self.state = StateMutation::on(self.state.clone())
+                .mark_process_status(ProcessStatus::Halted, process.id)
+                .mark_pane_status(PaneStatus::Dead, process.id)
+                .set_process_pid(None, process.id)
+                .commit();
+            self.draw_screen()?;
+        }
+        Ok(())
     }
 
     pub fn break_pane(&mut self) {
@@ -174,14 +186,17 @@ impl Controller {
         if process.pane_status == PaneStatus::Null || process.pane_status == PaneStatus::Dead {
             let addy = self.tmux_context.create_pane(&process.command).unwrap();
             let pane_id = addy.pane_id.unwrap();
+            let pid = self.tmux_context.get_pane_pid(pane_id).ok();
+            info!("Started {} process, pid: {}", process.label, pid.unwrap_or(-1));
+
             state_mutation = state_mutation
                 .mark_current_pane_status(PaneStatus::Running)
-                .set_tmux_address(Some(addy));
+                .set_tmux_address(Some(addy))
+                .set_process_pid(pid, process.id);
             self.state = state_mutation.commit();
+
             return Some((
-                self.tmux_context
-                    .get_pane_pid(pane_id)
-                    .unwrap(),
+                pid.unwrap_or(-1),
                 self.state.current_selection,
             ));
         }

@@ -6,21 +6,9 @@ use termion::{event::Key, input::TermRead};
 
 use crate::config::KeybindingConfig;
 use crate::controller::Controller;
-use crate::daemon::start_watching_pids;
-
-fn matches_key(key: Key, acceptable_keys: &[String]) -> bool {
-    match key {
-        Key::Char(c) => acceptable_keys.contains(&c.to_string()),
-        _ => false,
-    }
-}
 
 pub fn input_loop(controller: Arc<Mutex<Controller>>) -> Result<(), Box<dyn Error>> {
     let keybinding = controller.lock().unwrap().config.keybinding.clone();
-
-    controller.lock().unwrap().on_startup()?;
-
-    start_watching_pids(controller.clone());
     let stdin = stdin();
 
     for c in stdin.keys() {
@@ -32,12 +20,7 @@ pub fn input_loop(controller: Arc<Mutex<Controller>>) -> Result<(), Box<dyn Erro
         }
     }
 
-    controller.lock().unwrap().on_exit()?;
     Ok(())
-}
-
-fn handle_filter_enter_key_press() {
-    // TODO - this is a stub
 }
 
 fn handle_normal_mode_keypresses(
@@ -65,4 +48,11 @@ fn handle_normal_mode_keypresses(
         }
     }
     Ok(false)
+}
+
+fn matches_key(key: Key, acceptable_keys: &[String]) -> bool {
+    match key {
+        Key::Char(c) => acceptable_keys.contains(&c.to_string()),
+        _ => false,
+    }
 }

@@ -63,6 +63,7 @@ impl TmuxContext {
 
         let window_id = parse_id(&window)?;
         let pane_id = parse_id(&pane)?;
+
         info!(
             "creating tmux context: session: {}, detached_session: {}, window_id: {}, pane_id: {}",
             session,

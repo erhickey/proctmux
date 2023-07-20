@@ -20,6 +20,7 @@ pub struct Process {
     pub status: ProcessStatus,
     pub pane_status: PaneStatus,
     pub tmux_address: Option<TmuxAddress>,
+    pub pid: Option<i32>,
 }
 
 impl Process {
@@ -30,7 +31,8 @@ impl Process {
             command: command.to_string(),
             status: ProcessStatus::Halted,
             pane_status: PaneStatus::Null,
-            tmux_address: None
+            tmux_address: None,
+            pid: None,
         }
     }
 }
@@ -220,6 +222,19 @@ impl StateMutation {
 
     pub fn set_gui_state(mut self, gui_state: GUIState) -> Self {
         self.init_state.gui_state = gui_state;
+        self
+    }
+
+    pub fn set_process_pid(mut self, pid: Option<i32>, process_id: usize) -> Self {
+        self.init_state.processes = self.init_state.processes.iter()
+            .map(|p| {
+                let mut p = p.clone();
+                if p.id == process_id {
+                    p.pid = pid;
+                }
+                p
+            })
+            .collect();
         self
     }
 }
