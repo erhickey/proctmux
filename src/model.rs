@@ -1,3 +1,5 @@
+use crate::config::ProcessConfig;
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ProcessStatus {
     Running = 1,
@@ -5,45 +7,54 @@ pub enum ProcessStatus {
     Halted = 3,
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PaneStatus {
     Null = 1,
     Running = 2,
     Dead = 3,
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Process {
     pub id: usize,
     pub label: String,
-    pub command: String,
     pub status: ProcessStatus,
     pub pane_status: PaneStatus,
     pub tmux_address: Option<TmuxAddress>,
     pub pid: Option<i32>,
+    pub config: ProcessConfig,
 }
 
 impl Process {
-    pub fn new(id: usize, label: &str, command: &str) -> Self {
+    pub fn new(id: usize, label: &str, config: ProcessConfig) -> Self {
         Process {
             id,
             label: label.to_string(),
-            command: command.to_string(),
             status: ProcessStatus::Halted,
             pane_status: PaneStatus::Null,
             tmux_address: None,
             pid: None,
+            config,
         }
+    }
+
+    pub fn command(&self) -> String {
+        self.config.shell.clone().unwrap_or(
+            self.config.cmd.clone().unwrap_or(vec![])
+                .into_iter()
+                .map(|s| format!("'{}' ", s))
+                .collect()
+        )
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TmuxAddressChange {
     pub old_address: TmuxAddress,
     pub new_address: TmuxAddress,
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TmuxAddress {
     pub session_name: String,
     pub window: usize,

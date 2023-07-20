@@ -1,14 +1,23 @@
-use std::io::Error;
+use std::error::Error;
+use std::io::Result as IoResult;
 use std::process::{Child, Command, Stdio, Output};
 
-pub fn list_sessions() -> Result<Output, Error> {
+fn clean_output(s: &str) -> String {
+    s.replace("\n", "")
+}
+
+pub fn read_bytes(output: IoResult<Output>) -> Result<String, Box<dyn Error>> {
+    Ok(clean_output(&String::from_utf8(output?.stdout)?))
+}
+
+pub fn list_sessions() -> IoResult<Output> {
     Command::new("tmux")
             .arg("list-sessions")
             .arg("-F")
             .arg("#{session_name}")
             .output()
 }
-pub fn current_session() -> Result<Output, Error> {
+pub fn current_session() -> IoResult<Output> {
     Command::new("tmux")
             .arg("display-message")
             .arg("-p")
@@ -16,7 +25,7 @@ pub fn current_session() -> Result<Output, Error> {
             .output()
 }
 
-pub fn current_window() -> Result<Output, Error> {
+pub fn current_window() -> IoResult<Output> {
     Command::new("tmux")
             .arg("display-message")
             .arg("-p")
@@ -24,7 +33,7 @@ pub fn current_window() -> Result<Output, Error> {
             .output()
 }
 
-pub fn current_pane() -> Result<Output, Error> {
+pub fn current_pane() -> IoResult<Output> {
     Command::new("tmux")
             .arg("display-message")
             .arg("-p")
@@ -32,7 +41,7 @@ pub fn current_pane() -> Result<Output, Error> {
             .output()
 }
 
-pub fn start_detached_session(session: &str) -> Result<Output, Error> {
+pub fn start_detached_session(session: &str) -> IoResult<Output> {
     Command::new("tmux")
             .arg("new-session")
             .arg("-d")
@@ -41,7 +50,7 @@ pub fn start_detached_session(session: &str) -> Result<Output, Error> {
             .output()
 }
 
-pub fn set_remain_on_exit(session: &str, window: usize, on: bool) -> Result<Output, Error> {
+pub fn set_remain_on_exit(session: &str, window: usize, on: bool) -> IoResult<Output> {
      Command::new("tmux")
              .arg("set-option")
              .arg("-t")
@@ -51,7 +60,7 @@ pub fn set_remain_on_exit(session: &str, window: usize, on: bool) -> Result<Outp
              .output()
 }
 
-pub fn kill_session(session: &str) -> Result<Output, Error> {
+pub fn kill_session(session: &str) -> IoResult<Output> {
     Command::new("tmux")
             .arg("kill-session")
             .arg("-t")
@@ -66,7 +75,7 @@ pub fn break_pane(
     dest_session: &str,
     dest_window: usize,
     window_label: &str
-) -> Result<Output, Error> {
+) -> IoResult<Output> {
     Command::new("tmux")
             .arg("break-pane")
             .arg("-d")
@@ -76,6 +85,9 @@ pub fn break_pane(
             .arg(format!("{}:{}", dest_session, dest_window))
             .arg("-n")
             .arg(window_label)
+            .arg("-P")
+            .arg("-F")
+            .arg("#{pane_index}")
             .output()
 }
 
@@ -85,7 +97,7 @@ pub fn join_pane(
     dest_session: &str,
     dest_window: usize,
     dest_pane: usize
-) -> Result<Output, Error> {
+) -> IoResult<Output> {
     Command::new("tmux")
             .arg("join-pane")
             .arg("-d")
@@ -99,7 +111,7 @@ pub fn join_pane(
             .output()
 }
 
-pub fn kill_pane(session: &str, window: usize, pane: usize) -> Result<Output, Error> {
+pub fn kill_pane(session: &str, window: usize, pane: usize) -> IoResult<Output> {
     Command::new("tmux")
             .arg("kill-pane")
             .arg("-t")
@@ -107,7 +119,7 @@ pub fn kill_pane(session: &str, window: usize, pane: usize) -> Result<Output, Er
             .output()
 }
 
-pub fn create_pane(session: &str, window: usize, pane: usize, command: &str) -> Result<Output, Error> {
+pub fn create_pane(session: &str, window: usize, pane: usize, command: &str) -> IoResult<Output> {
     Command::new("tmux")
             .arg("split-window")
             .arg("-d")
@@ -123,7 +135,7 @@ pub fn create_pane(session: &str, window: usize, pane: usize, command: &str) -> 
             .output()
 }
 
-pub fn get_pane_pid(session: &str, window: usize, pane: usize) -> Result<Output, Error> {
+pub fn get_pane_pid(session: &str, window: usize, pane: usize) -> IoResult<Output> {
     Command::new("tmux")
         .arg("display-message")
         .arg("-p")
@@ -133,7 +145,7 @@ pub fn get_pane_pid(session: &str, window: usize, pane: usize) -> Result<Output,
         .output()
 }
 
-pub fn command_mode(session: &str) -> Result<Child, Error> {
+pub fn command_mode(session: &str) -> IoResult<Child> {
     Command::new("tmux")
         .arg("-C")
         .arg("attach-session")

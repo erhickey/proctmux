@@ -13,10 +13,8 @@ pub fn input_loop(controller: Arc<Mutex<Controller>>) -> Result<(), Box<dyn Erro
 
     for c in stdin.keys() {
         info!("Got keypress: {:?}", c);
-        if let Ok(result) = handle_normal_mode_keypresses(controller.clone(), c, &keybinding) {
-            if result {
-                break;
-            }
+        if handle_normal_mode_keypresses(controller.clone(), c, &keybinding).unwrap_or(false) {
+            break;
         }
     }
 
