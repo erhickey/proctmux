@@ -9,7 +9,7 @@ fn get_current_working_dir() -> std::io::Result<PathBuf> {
 
 fn default_general() -> GeneralConfig {
     GeneralConfig {
-        detatched_session_name: default_detatched_session_name(), 
+        detached_session_name: default_detached_session_name(),
         kill_existing_session: default_kill_existing_session(),
     }
 }
@@ -21,6 +21,7 @@ pub struct ProcTmuxConfig {
     pub general: GeneralConfig,
     pub procs: HashMap<String, ProcessConfig>,
     pub keybinding: KeybindingConfig,
+    pub log_file: String,
 }
 
 fn default_kill_signal() -> String {
@@ -30,7 +31,7 @@ fn current_working_dir() -> String {
     get_current_working_dir().unwrap().to_str().unwrap().to_string()
 }
 fn default_autostart() -> bool {
-    false 
+    false
 }
 fn default_quit_keybinding() -> Vec<String> {
     vec!["q".to_string()]
@@ -89,7 +90,7 @@ pub struct KeybindingConfig {
 }
 
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProcessConfig{
     #[serde(default = "default_autostart")]
     pub autostart: bool,
@@ -107,7 +108,7 @@ pub struct ProcessConfig{
     pub meta_tags: Option<Vec<String>>
 }
 
-fn default_detatched_session_name() -> String {
+fn default_detached_session_name() -> String {
     "proctmux".to_string()
 }
 
@@ -117,8 +118,8 @@ fn default_kill_existing_session() -> bool {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct GeneralConfig{
-    #[serde(default = "default_detatched_session_name")]
-    pub detatched_session_name: String,
+    #[serde(default = "default_detached_session_name")]
+    pub detached_session_name: String,
     #[serde(default = "default_kill_existing_session")]
     pub kill_existing_session: bool,
 }

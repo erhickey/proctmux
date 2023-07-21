@@ -27,7 +27,9 @@ use tmux_daemon::TmuxDaemon;
 extern crate log;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let file = std::fs::File::create("/tmp/proctmux.log").unwrap();
+    let config = parse_config_from_args()?;
+
+    let file = std::fs::File::create(config.log_file.clone()).unwrap();
     env_logger::builder()
         .target(env_logger::Target::Pipe(Box::new(file)))
         .filter_level(log::LevelFilter::Trace)
@@ -35,23 +37,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     info!("Starting proctmux");
 
-    let config = parse_config_from_args()?;
-
     let tmux_context = TmuxContext::new(
-        &config.general.detatched_session_name,
+        &config.general.detached_session_name,
         config.general.kill_existing_session
     )?;
 
     let state = State::new(
-        vec![
-            Process::new(1, "Simple Echo", "echo hi"),
-            Process::new(
-                2,
-                "Echo x10",
-                "for i in `seq 1 3`; do echo $i; sleep 1 ; done",
-            ),
-            Process::new(3, "vim", "vim"),
-        ]
+        config.procs
+            .iter()
+            .enumerate()
+            .map(|(ix, (k, v))| {
+                Process::new(ix + 1, k, v.clone())
+            })
+            .collect()
     );
 
     let (sender, receiver) = channel();

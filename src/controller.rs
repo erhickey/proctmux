@@ -7,6 +7,7 @@ use termion::raw::RawTerminal;
 use crate::config::ProcTmuxConfig;
 use crate::draw::{draw_screen, init_screen, prepare_screen_for_exit};
 use crate::model::{PaneStatus, ProcessStatus, State, StateMutation, GUIStateMutation, Mutator};
+use crate::tmux;
 use crate::tmux_context::TmuxContext;
 
 pub struct Controller {
@@ -53,7 +54,7 @@ impl Controller {
             .for_each(|process| {
                 if let Some(addy) = &process.tmux_address {
                     if let Some(pane_id) = addy.pane_id {
-                        self.tmux_context.kill_pane(pane_id).unwrap();
+                        let _ = tmux::kill_pane(&addy.session_name, addy.window, pane_id);
                     }
                 }
             });
@@ -89,7 +90,7 @@ impl Controller {
             .commit();
     }
 
-    pub fn on_keypress_start(&mut self) -> Result<Option<(i32, usize)>, Box<dyn Error>> {
+    pub fn on_keypress_start(&mut self) -> Result<Option<i32>, Box<dyn Error>> {
         let result = self.start_process();
         self.draw_screen()?;
         Ok(result)
@@ -159,14 +160,14 @@ impl Controller {
     pub fn join_pane(&mut self) {
         let process = self.state.current_process();
         if process.pane_status != PaneStatus::Null {
-            let address_change = self.tmux_context.join_pane(process.id).unwrap();
+            let address = self.tmux_context.join_pane(process.id).unwrap();
             self.state = StateMutation::on(self.state.clone())
-                .set_tmux_address(Some(address_change.new_address))
+                .set_tmux_address(Some(address))
                 .commit();
         }
     }
 
-    pub fn start_process(&mut self) -> Option<(i32, usize)> {
+    pub fn start_process(&mut self) -> Option<i32> {
         let process = self.state.current_process().clone();
         if process.status != ProcessStatus::Halted {
             return None;
@@ -176,7 +177,7 @@ impl Controller {
             .mark_current_process_status(ProcessStatus::Running);
 
         if process.pane_status == PaneStatus::Dead {
-            if let Some(addy) = process.tmux_address {
+            if let Some(addy) = process.tmux_address.clone() {
                 if let Some(pane_id) = addy.pane_id {
                     self.tmux_context.kill_pane(pane_id).unwrap();
                 }
@@ -184,7 +185,7 @@ impl Controller {
         }
 
         if process.pane_status == PaneStatus::Null || process.pane_status == PaneStatus::Dead {
-            let addy = self.tmux_context.create_pane(&process.command).unwrap();
+            let addy = self.tmux_context.create_pane(&process.command()).unwrap();
             let pane_id = addy.pane_id.unwrap();
             let pid = self.tmux_context.get_pane_pid(pane_id).ok();
             info!("Started {} process, pid: {}", process.label, pid.unwrap_or(-1));
@@ -195,10 +196,7 @@ impl Controller {
                 .set_process_pid(pid, process.id);
             self.state = state_mutation.commit();
 
-            return Some((
-                pid.unwrap_or(-1),
-                self.state.current_selection,
-            ));
+            return pid;
         }
 
         None
@@ -211,14 +209,11 @@ impl Controller {
             return;
         }
 
-        if let Some(addy) = &process.tmux_address {
-            if let Some(pane_id) = addy.pane_id {
-                let pane_pid = self.tmux_context.get_pane_pid(pane_id).unwrap();
-                unsafe { libc::kill(pane_pid, libc::SIGKILL) };
-                self.state = StateMutation::on(self.state.clone())
-                    .mark_current_process_status(ProcessStatus::Halting)
-                    .commit();
-            }
+        if let Some(pid) = process.pid {
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+            self.state = StateMutation::on(self.state.clone())
+                .mark_current_process_status(ProcessStatus::Halting)
+                .commit();
         }
     }
 }
