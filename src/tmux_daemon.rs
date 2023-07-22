@@ -9,7 +9,7 @@ use std::thread::spawn;
 use crate::tmux;
 
 pub struct TmuxDaemon {
-    session: String,
+    target: String,
     process: Child,
     stdout: Option<ChildStdout>,
     stdin: ChildStdin,
@@ -17,14 +17,14 @@ pub struct TmuxDaemon {
 }
 
 impl TmuxDaemon {
-    pub fn new(session: &str) -> Result<Self, Box<dyn Error>> {
-        info!("Starting tmux command mode (Session {}) process", session);
-        let mut process = tmux::command_mode(session)?;
+    pub fn new(target: &str) -> Result<Self, Box<dyn Error>> {
+        info!("Starting tmux command mode (Target {}) process", target);
+        let mut process = tmux::command_mode(target)?;
         let stdin = process.stdin.take().unwrap();
         let stdout = process.stdout.take();
 
         Ok(TmuxDaemon {
-            session: session.to_string(),
+            target: target.to_string(),
             process,
             stdout,
             stdin,
@@ -33,16 +33,16 @@ impl TmuxDaemon {
     }
 
     fn subscribe_to_pane_dead_notifications(&mut self) -> std::io::Result<()> {
-        info!("Subscribing to pane dead notifications (Session: {})", self.session);
+        info!("Subscribing to pane dead notifications (Target: {})", self.target);
         let cmd = format!(
             "refresh-client -B pane_dead_notification_{}:%*:\"#{{pane_dead}} #{{pane_pid}}\"\n",
-            self.session
+            clean(&self.target)
         );
         self.stdin.write_all(cmd.as_bytes())
     }
 
     pub fn kill(&mut self) -> std::io::Result<ExitStatus> {
-        info!("Killing tmux command mode (Session: {}) process", self.session);
+        info!("Killing tmux command mode (Target: {}) process", self.target);
         self.running.store(false, Ordering::Relaxed);
         self.process.kill()?;
         self.process.wait()  // make sure stdin is closed
@@ -79,4 +79,8 @@ fn parse_pane_dead_notification(line: String) -> Option<i32> {
         }
     }
     None
+}
+
+fn clean(s: &str) -> String {
+    s.chars().filter(|c| c.is_alphanumeric()).collect()
 }

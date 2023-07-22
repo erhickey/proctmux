@@ -8,19 +8,11 @@ pub enum ProcessStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PaneStatus {
-    Null = 1,
-    Running = 2,
-    Dead = 3,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Process {
     pub id: usize,
     pub label: String,
     pub status: ProcessStatus,
-    pub pane_status: PaneStatus,
-    pub tmux_address: Option<TmuxAddress>,
+    pub pane_id: Option<String>,
     pub pid: Option<i32>,
     pub config: ProcessConfig,
 }
@@ -31,8 +23,7 @@ impl Process {
             id,
             label: label.to_string(),
             status: ProcessStatus::Halted,
-            pane_status: PaneStatus::Null,
-            tmux_address: None,
+            pane_id: None,
             pid: None,
             config,
         }
@@ -45,33 +36,6 @@ impl Process {
                 .map(|s| format!("'{}' ", s))
                 .collect()
         )
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TmuxAddressChange {
-    pub old_address: TmuxAddress,
-    pub new_address: TmuxAddress,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TmuxAddress {
-    pub session_name: String,
-    pub window: usize,
-    pub pane_id: Option<usize>,
-}
-
-impl TmuxAddress {
-    pub fn new(
-        session_name: &str,
-        window: usize,
-        pane_id: Option<usize>
-    ) -> Self {
-        TmuxAddress {
-            session_name: session_name.to_string(),
-            window,
-            pane_id
-        }
     }
 }
 
@@ -192,52 +156,37 @@ impl StateMutation {
         self
     }
 
-    pub fn mark_current_process_status(mut self, status: ProcessStatus) -> Self {
-        self.init_state.processes[self.init_state.current_selection].status = status;
-        self
-    }
-
-    pub fn mark_current_pane_status(mut self, status: PaneStatus) -> Self {
-        self.init_state.processes[self.init_state.current_selection].pane_status = status;
-        self
-    }
-
-    pub fn mark_process_status(mut self, status: ProcessStatus, process_id: usize) -> Self {
-        self.init_state.processes = self.init_state.processes.iter()
+    pub fn set_process_status(mut self, status: ProcessStatus, process_id: usize) -> Self {
+        self.init_state.processes = self.init_state.processes
+            .iter()
             .map(|p| {
-            let mut p = p.clone();
-            if p.id == process_id {
-                p.status= status.clone();
-            }
-            p
-        }).collect();
+                let mut p = p.clone();
+                if p.id == process_id {
+                    p.status= status.clone();
+                }
+                p
+            })
+            .collect();
         self
     }
 
-    pub fn mark_pane_status(mut self, status: PaneStatus, process_id: usize) -> Self {
-        self.init_state.processes = self.init_state.processes.iter()
+    pub fn set_process_pane_id(mut self, pane_id: Option<String>, process_id: usize) -> Self {
+        self.init_state.processes = self.init_state.processes
+            .iter()
             .map(|p| {
-            let mut p = p.clone();
-            if p.id == process_id {
-                p.pane_status = status.clone();
-            }
-            p
-        }).collect();
-        self
-    }
-
-    pub fn set_tmux_address(mut self, addy: Option<TmuxAddress>) -> Self {
-        self.init_state.processes[self.init_state.current_selection].tmux_address = addy;
-        self
-    }
-
-    pub fn set_gui_state(mut self, gui_state: GUIState) -> Self {
-        self.init_state.gui_state = gui_state;
+                let mut p = p.clone();
+                if p.id == process_id {
+                    p.pane_id = pane_id.clone();
+                }
+                p
+            })
+            .collect();
         self
     }
 
     pub fn set_process_pid(mut self, pid: Option<i32>, process_id: usize) -> Self {
-        self.init_state.processes = self.init_state.processes.iter()
+        self.init_state.processes = self.init_state.processes
+            .iter()
             .map(|p| {
                 let mut p = p.clone();
                 if p.id == process_id {
@@ -246,6 +195,11 @@ impl StateMutation {
                 p
             })
             .collect();
+        self
+    }
+
+    pub fn set_gui_state(mut self, gui_state: GUIState) -> Self {
+        self.init_state.gui_state = gui_state;
         self
     }
 }
