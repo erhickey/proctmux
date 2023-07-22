@@ -8,7 +8,8 @@ use log::info;
 use crate::tmux;
 
 pub struct TmuxContext {
-    pub pane_id: String,
+    pane_id: String,
+    pub session: String,
     pub detached_session: String,
 }
 
@@ -17,6 +18,10 @@ impl TmuxContext {
         let pane_id = match tmux::read_bytes(tmux::current_pane()) {
             Ok(val) => val,
             Err(e) => panic!("Error: Could not retrieve tmux pane id: {}", e),
+        };
+        let session = match tmux::read_bytes(tmux::current_session()) {
+            Ok(val) => val,
+            Err(e) => panic!("Error: Could not retrieve tmux session id: {}", e),
         };
 
         let existing_session_names: HashSet<String> = tmux::read_bytes(tmux::list_sessions())?
@@ -37,13 +42,15 @@ impl TmuxContext {
         }
 
         info!(
-            "creating tmux context: pane_id: {}, detached_session: {}",
+            "creating tmux context: pane_id: {}, session: {}, detached_session: {}",
             pane_id,
+            session,
             detached_session,
         );
 
         Ok(TmuxContext {
             pane_id,
+            session,
             detached_session: detached_session.to_string(),
         })
     }

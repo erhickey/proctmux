@@ -18,6 +18,14 @@ pub fn list_sessions() -> IoResult<Output> {
         .output()
 }
 
+pub fn current_session() -> IoResult<Output> {
+    Command::new("tmux")
+        .arg("display-message")
+        .arg("-p")
+        .arg("#S")
+        .output()
+}
+
 pub fn current_pane() -> IoResult<Output> {
     Command::new("tmux")
         .arg("display-message")
@@ -119,12 +127,12 @@ pub fn get_pane_pid(pane_id: &str) -> IoResult<Output> {
         .output()
 }
 
-pub fn command_mode(target: &str) -> IoResult<Child> {
+pub fn command_mode(session: &str) -> IoResult<Child> {
     Command::new("tmux")
         .arg("-C")
         .arg("attach-session")
         .arg("-t")
-        .arg(target)
+        .arg(session)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
