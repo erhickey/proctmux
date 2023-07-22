@@ -14,6 +14,7 @@ pub struct TmuxDaemon {
     stdout: Option<ChildStdout>,
     stdin: ChildStdin,
     running: Arc<AtomicBool>,
+    subscription_name: String,
 }
 
 impl TmuxDaemon {
@@ -28,15 +29,16 @@ impl TmuxDaemon {
             process,
             stdout,
             stdin,
-            running: Arc::new(AtomicBool::new(true))
+            running: Arc::new(AtomicBool::new(true)),
+            subscription_name: format!("pane_dead_notification_{}", session),
         })
     }
 
     fn subscribe_to_pane_dead_notifications(&mut self) -> std::io::Result<()> {
-        info!("Subscribing to pane dead notifications (Session: {})", self.session);
+        info!("Starting subscription (Session: {}): {}", self.session, self.subscription_name);
         let cmd = format!(
-            "refresh-client -B pane_dead_notification_{}:%*:\"#{{pane_dead}} #{{pane_pid}}\"\n",
-            self.session
+            "refresh-client -B {}:%*:\"#{{pane_dead}} #{{pane_pid}}\"\n",
+            self.subscription_name
         );
         self.stdin.write_all(cmd.as_bytes())
     }
@@ -52,13 +54,14 @@ impl TmuxDaemon {
         self.subscribe_to_pane_dead_notifications()?;
         let mut buf_reader = BufReader::new(self.stdout.take().unwrap());
         let running = self.running.clone();
+        let subscription_name = self.subscription_name.clone();
 
         spawn(move || {
             while running.load(Ordering::Relaxed) {
                 let mut buf = String::new();
                 match buf_reader.read_line(&mut buf) {
                     Ok(_) => {
-                        if let Some(pid) = parse_pane_dead_notification(buf) {
+                        if let Some(pid) = parse_pane_dead_notification(buf, &subscription_name) {
                             sender.send(pid).unwrap();
                         }
                     },
@@ -71,8 +74,8 @@ impl TmuxDaemon {
     }
 }
 
-fn parse_pane_dead_notification(line: String) -> Option<i32> {
-    if line.starts_with("%subscription-changed pane_dead_notification_") {
+fn parse_pane_dead_notification(line: String, subscription_name: &str) -> Option<i32> {
+    if line.starts_with(&format!("%subscription-changed {}", subscription_name)) {
         let ss: Vec<&str> = line.split(' ').collect();
         if ss[ss.len() - 2] == "1" {
             return ss[ss.len() - 1].trim().parse().ok();
