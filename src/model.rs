@@ -107,6 +107,17 @@ impl State {
     pub fn current_process(&self) -> &Process {
         &self.processes[self.current_selection]
     }
+
+    pub fn get_filtered_processes(&self) -> Vec<&Process> {
+        self.processes
+            .iter()
+            .filter(|c| {
+            if let Some(filter_text) = &self.gui_state.filter_text {
+                return c.label.to_lowercase().contains(&filter_text.to_lowercase());
+            } 
+            true
+        }).collect::<Vec<_>>()
+    }
 }
 
 pub trait Mutator<T> {

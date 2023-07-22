@@ -31,10 +31,46 @@ impl Controller {
         })
     }
 
+    pub fn is_entering_filter_text(&self) -> bool {
+        self.state.gui_state.entering_filter_text
+    }
+    
+    pub fn get_filter_text(&self) -> Option<String> {
+        self.state.gui_state.filter_text.clone()
+    }
+    
+    pub fn on_filter_start(&mut self) -> Result<(), Box<dyn Error>> {
+        let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
+            .start_entering_filter()
+            .commit();
+        self.state = StateMutation::on(self.state.clone())
+            .set_gui_state(gui_state)
+            .commit();
+        self.draw_screen()
+    }
+    pub fn on_filter_done(&mut self) -> Result<(), Box<dyn Error>> {
+        let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
+            .stop_entering_filter()
+            .commit();
+        self.state = StateMutation::on(self.state.clone())
+            .set_gui_state(gui_state)
+            .commit();
+        self.draw_screen()
+    }
+    
+    pub fn on_filter_set(&mut self, new_filter_text: Option<String>) -> Result<(), Box<dyn Error>> {
+        let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
+            .set_filter_text(new_filter_text)
+            .commit();
+        self.state = StateMutation::on(self.state.clone())
+            .set_gui_state(gui_state)
+            .commit();
+        self.draw_screen()
+    }
+
     fn draw_screen(&self) -> Result<(), Box<dyn Error>> {
         draw_screen(&self.stdout, &self.state)
     }
-
     pub fn on_startup(&self) -> Result<(), Box<dyn Error>> {
         self.draw_screen()?;
         self.tmux_context.prepare()?;

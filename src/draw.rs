@@ -9,6 +9,7 @@ use crate::model::{ProcessStatus, State};
 
 const UP: char = '▲';
 const DOWN: char = '▼';
+const RIGHT: char = '▶';
 
 pub fn init_screen() -> Result<RawTerminal<Stdout>, Box<dyn Error>> {
     let mut stdout = stdout().into_raw_mode()?;
@@ -29,33 +30,48 @@ pub fn prepare_screen_for_exit(mut stdout: &Stdout) -> Result<(), Box<dyn Error>
 
 pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Error>> {
     write!(stdout, "{}", clear::All)?;
+    let mut y_offset = 1;
+    if state.gui_state.entering_filter_text {
+        let filter_text = state.gui_state.filter_text.clone().unwrap_or("".to_string());
+            write!(stdout, "{}{}{} {}{}{}", 
+                cursor::Goto(0, y_offset as u16),
+                Fg(color::White),
+                style::Bold,
+                RIGHT,
+                filter_text, 
+                style::Reset)?;
+        y_offset += 1;
+    }
 
-    for (ix, c) in state.processes.iter().enumerate() {
+    for (ix, c) in state.get_filtered_processes()
+        .iter()
+        .enumerate() {
+        let y_pos = ix + y_offset;
         match c.status {
             ProcessStatus::Running => write!(
                 stdout,
                 "{}{} {} ",
-                cursor::Goto(0, (ix + 1) as u16),
+                cursor::Goto(0, (y_pos + 1) as u16),
                 Fg(color::Green),
                 UP
             )?,
             ProcessStatus::Halting => write!(
                 stdout,
                 "{}{} {} ",
-                cursor::Goto(0, (ix + 1) as u16),
+                cursor::Goto(0, (y_pos + 1) as u16),
                 Fg(color::Yellow),
                 UP
             )?,
             ProcessStatus::Halted => write!(
                 stdout,
                 "{}{} {} ",
-                cursor::Goto(0, (ix + 1) as u16),
+                cursor::Goto(0, (y_pos + 1) as u16),
                 Fg(color::Red),
                 DOWN,
             )?,
         }
 
-        if state.current_selection == ix {
+        if state.current_selection == c.id {
             write!(
                 stdout,
                 "{}{}{}{:width$}{}",
