@@ -22,7 +22,7 @@ pub fn current_session() -> IoResult<Output> {
     Command::new("tmux")
         .arg("display-message")
         .arg("-p")
-        .arg("#S")
+        .arg("#{session_id}")
         .output()
 }
 
@@ -34,12 +34,15 @@ pub fn current_pane() -> IoResult<Output> {
         .output()
 }
 
-pub fn start_detached_session(session: &str) -> IoResult<Output> {
+pub fn start_detached_session(session_name: &str) -> IoResult<Output> {
     Command::new("tmux")
         .arg("new-session")
         .arg("-d")
         .arg("-s")
-        .arg(session)
+        .arg(session_name)
+        .arg("-P")
+        .arg("-F")
+        .arg("#{session_id}")
         .output()
 }
 
@@ -53,11 +56,11 @@ pub fn set_remain_on_exit(pane_id: &str, on: bool) -> IoResult<Output> {
         .output()
 }
 
-pub fn kill_session(session: &str) -> IoResult<Output> {
+pub fn kill_session(session_id: &str) -> IoResult<Output> {
     Command::new("tmux")
         .arg("kill-session")
         .arg("-t")
-        .arg(session)
+        .arg(session_id)
         .output()
 }
 
@@ -127,12 +130,12 @@ pub fn get_pane_pid(pane_id: &str) -> IoResult<Output> {
         .output()
 }
 
-pub fn command_mode(session: &str) -> IoResult<Child> {
+pub fn command_mode(session_id: &str) -> IoResult<Child> {
     Command::new("tmux")
         .arg("-C")
         .arg("attach-session")
         .arg("-t")
-        .arg(session)
+        .arg(session_id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()

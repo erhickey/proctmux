@@ -9,7 +9,7 @@ use std::thread::spawn;
 use crate::tmux;
 
 pub struct TmuxDaemon {
-    session: String,
+    session_id: String,
     process: Child,
     stdout: Option<ChildStdout>,
     stdin: ChildStdin,
@@ -18,24 +18,24 @@ pub struct TmuxDaemon {
 }
 
 impl TmuxDaemon {
-    pub fn new(session: &str) -> Result<Self, Box<dyn Error>> {
-        info!("Starting tmux command mode (Session {}) process", session);
-        let mut process = tmux::command_mode(session)?;
+    pub fn new(session_id: &str) -> Result<Self, Box<dyn Error>> {
+        info!("Starting tmux command mode (Session {}) process", session_id);
+        let mut process = tmux::command_mode(session_id)?;
         let stdin = process.stdin.take().unwrap();
         let stdout = process.stdout.take();
 
         Ok(TmuxDaemon {
-            session: session.to_string(),
+            session_id: session_id.to_string(),
             process,
             stdout,
             stdin,
             running: Arc::new(AtomicBool::new(true)),
-            subscription_name: format!("pane_dead_notification_{}", session),
+            subscription_name: format!("pane_dead_notification_{}", clean(session_id)),
         })
     }
 
     fn subscribe_to_pane_dead_notifications(&mut self) -> std::io::Result<()> {
-        info!("Starting subscription (Session: {}): {}", self.session, self.subscription_name);
+        info!("Starting subscription (Session: {}): {}", self.session_id, self.subscription_name);
         let cmd = format!(
             "refresh-client -B {}:%*:\"#{{pane_dead}} #{{pane_pid}}\"\n",
             self.subscription_name
@@ -44,14 +44,13 @@ impl TmuxDaemon {
     }
 
     pub fn kill(&mut self) -> std::io::Result<ExitStatus> {
-        info!("Killing tmux command mode (Session: {}) process", self.session);
+        info!("Killing tmux command mode (Session: {}) process", self.session_id);
         self.running.store(false, Ordering::Relaxed);
         self.process.kill()?;
         self.process.wait()  // make sure stdin is closed
     }
 
     pub fn listen_for_dead_panes(&mut self, sender: Sender<i32>) -> Result<(), Box<dyn Error>> {
-        self.subscribe_to_pane_dead_notifications()?;
         let mut buf_reader = BufReader::new(self.stdout.take().unwrap());
         let running = self.running.clone();
         let subscription_name = self.subscription_name.clone();
@@ -70,6 +69,7 @@ impl TmuxDaemon {
             }
         });
 
+        self.subscribe_to_pane_dead_notifications()?;
         Ok(())
     }
 }
@@ -82,4 +82,8 @@ fn parse_pane_dead_notification(line: String, subscription_name: &str) -> Option
         }
     }
     None
+}
+
+fn clean(s: &str) -> String {
+    s.replace("$", "")
 }
