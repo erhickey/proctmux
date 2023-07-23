@@ -1,4 +1,6 @@
-use crate::config::ProcessConfig;
+use std::collections::HashSet;
+
+use crate::config::{ProcTmuxConfig, ProcessConfig};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ProcessStatus {
@@ -31,10 +33,13 @@ impl Process {
 
     pub fn command(&self) -> String {
         self.config.shell.clone().unwrap_or(
-            self.config.cmd.clone().unwrap_or(vec![])
+            self.config
+                .cmd
+                .clone()
+                .unwrap_or(vec![])
                 .into_iter()
                 .map(|s| format!("'{}' ", s))
-                .collect()
+                .collect(),
         )
     }
 }
@@ -48,18 +53,25 @@ pub struct GUIState {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct State {
-    pub current_selection: usize,
+    pub config: ProcTmuxConfig,
+    pub current_proc_id: usize,
     pub processes: Vec<Process>,
     pub messages: Vec<String>,
     pub gui_state: GUIState,
 }
 
 impl State {
-    pub fn new(processes: Vec<Process>) -> Self {
+    pub fn new(config: &ProcTmuxConfig) -> Self {
         State {
-            current_selection: 0,
-            processes,
+            current_proc_id: 0,
+            processes: config
+                .procs
+                .iter()
+                .enumerate()
+                .map(|(ix, (k, v))| Process::new(ix + 1, k, v.clone()))
+                .collect(),
             messages: vec![],
+            config: config.clone(),
             gui_state: GUIState {
                 messages: vec![],
                 filter_text: None,
@@ -68,8 +80,47 @@ impl State {
         }
     }
 
-    pub fn current_process(&self) -> &Process {
-        &self.processes[self.current_selection]
+    pub fn current_process(&self) -> Option<&Process> {
+        self.processes
+            .iter()
+            .find(|proc| proc.id == self.current_proc_id)
+    }
+
+    pub fn get_filtered_processes(&self) -> Vec<&Process> {
+        fn filter_by_category(filter_text: &str, proc: &Process) -> bool {
+            proc.config
+                .categories
+                .as_ref()
+                .unwrap_or(&vec![])
+                .contains(&filter_text.to_lowercase())
+        }
+        fn filter_by_name_or_meta_tags(filter_text: &str, proc: &Process) -> bool {
+            let metas: HashSet<_> = HashSet::from_iter(
+                proc.config
+                    .meta_tags
+                    .as_ref()
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .map(|s| s.to_lowercase()),
+            );
+            proc.label
+                .to_lowercase()
+                .contains(&filter_text.to_lowercase())
+                || metas.contains(&filter_text.to_lowercase())
+        }
+        self.processes
+            .iter()
+            .filter(|proc| {
+                if let Some(filter_text) = &self.gui_state.filter_text {
+                    let prefix = &self.config.layout.category_search_prefix;
+                    if filter_text.starts_with(prefix) {
+                        return filter_by_category(&filter_text[prefix.len()..], proc);
+                    }
+                    return filter_by_name_or_meta_tags(filter_text, proc);
+                }
+                true
+            })
+            .collect::<Vec<_>>()
     }
 }
 
@@ -79,18 +130,16 @@ pub trait Mutator<T> {
 }
 
 pub struct StateMutation {
-    init_state: State
+    init_state: State,
 }
 
 pub struct GUIStateMutation {
-    init_state: GUIState
+    init_state: GUIState,
 }
 
 impl Mutator<GUIState> for GUIStateMutation {
     fn on(state: GUIState) -> Self {
-        GUIStateMutation{
-            init_state: state,
-        }
+        GUIStateMutation { init_state: state }
     }
 
     fn commit(self) -> GUIState {
@@ -127,9 +176,7 @@ impl GUIStateMutation {
 
 impl Mutator<State> for StateMutation {
     fn on(state: State) -> Self {
-        StateMutation{
-            init_state: state,
-        }
+        StateMutation { init_state: state }
     }
 
     fn commit(self) -> State {
@@ -138,31 +185,54 @@ impl Mutator<State> for StateMutation {
 }
 
 impl StateMutation {
-    pub fn next_process(mut self) -> Self {
-        if self.init_state.current_selection >= self.init_state.processes.len() - 1 {
-            self.init_state.current_selection = 0;
-        } else {
-            self.init_state.current_selection += 1;
+    fn select_first_process(mut self) -> Self {
+        let filtered_procs = self.init_state.get_filtered_processes();
+        if let Some(first) = filtered_procs.first() {
+            self.init_state.current_proc_id = first.id;
         }
         self
     }
-
-    pub fn previous_process(mut self) -> Self {
-        if self.init_state.current_selection == 0 {
-            self.init_state.current_selection = self.init_state.processes.len() - 1;
+    fn move_process_selection(mut self, direction: i8) -> Self {
+        let filtered_procs = self.init_state.get_filtered_processes();
+        if filtered_procs.is_empty() {
+            return self;
+        }
+        if filtered_procs.len() < 2 {
+            return self.select_first_process();
+        }
+        let available_proc_ids = filtered_procs.iter().map(|p| p.id).collect::<Vec<_>>();
+        let current_idx = available_proc_ids
+            .iter()
+            .position(|&p| p == self.init_state.current_proc_id);
+        if current_idx.is_none() {
+            return self.select_first_process();
+        }
+        let current_idx = current_idx.unwrap();
+        let new_idx = (current_idx as i32 + direction as i32) % filtered_procs.len() as i32;
+        if new_idx < 0 {
+            self.init_state.current_proc_id = available_proc_ids[filtered_procs.len() - 1];
         } else {
-            self.init_state.current_selection -= 1;
+            self.init_state.current_proc_id = available_proc_ids[new_idx as usize];
         }
         self
+    }
+    pub fn next_process(self) -> Self {
+        self.move_process_selection(1)
+    }
+
+    pub fn previous_process(self) -> Self {
+        self.move_process_selection(-1)
     }
 
     pub fn set_process_status(mut self, status: ProcessStatus, process_id: usize) -> Self {
-        self.init_state.processes = self.init_state.processes
+        self.init_state.processes = self
+            .init_state
+            .processes
             .iter()
             .map(|p| {
                 let mut p = p.clone();
                 if p.id == process_id {
-                    p.status= status.clone();
+                    p.status = status.clone();
                 }
                 p
             })
@@ -171,7 +241,9 @@ impl StateMutation {
     }
 
     pub fn set_process_pane_id(mut self, pane_id: Option<String>, process_id: usize) -> Self {
-        self.init_state.processes = self.init_state.processes
+        self.init_state.processes = self
+            .init_state
+            .processes
             .iter()
             .map(|p| {
                 let mut p = p.clone();
@@ -185,7 +257,9 @@ impl StateMutation {
     }
 
     pub fn set_process_pid(mut self, pid: Option<i32>, process_id: usize) -> Self {
-        self.init_state.processes = self.init_state.processes
+        self.init_state.processes = self
+            .init_state
+            .processes
             .iter()
             .map(|p| {
                 let mut p = p.clone();
