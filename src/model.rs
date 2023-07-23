@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::config::ProcessConfig;
+use crate::config::{ProcTmuxConfig, ProcessConfig};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ProcessStatus {
@@ -53,6 +53,7 @@ pub struct GUIState {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct State {
+    pub config: ProcTmuxConfig,
     pub current_proc_id: usize,
     pub processes: Vec<Process>,
     pub messages: Vec<String>,
@@ -60,11 +61,17 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(processes: Vec<Process>) -> Self {
+    pub fn new(config: &ProcTmuxConfig) -> Self {
         State {
             current_proc_id: 0,
-            processes,
+            processes: config
+                .procs
+                .iter()
+                .enumerate()
+                .map(|(ix, (k, v))| Process::new(ix + 1, k, v.clone()))
+                .collect(),
             messages: vec![],
+            config: config.clone(),
             gui_state: GUIState {
                 messages: vec![],
                 filter_text: None,
@@ -80,20 +87,36 @@ impl State {
     }
 
     pub fn get_filtered_processes(&self) -> Vec<&Process> {
+        fn filter_by_category(filter_text: &str, proc: &Process) -> bool {
+            proc.config
+                .categories
+                .as_ref()
+                .unwrap_or(&vec![])
+                .contains(&filter_text.to_lowercase())
+        }
+        fn filter_by_name_or_meta_tags(filter_text: &str, proc: &Process) -> bool {
+            let metas: HashSet<_> = HashSet::from_iter(
+                proc.config
+                    .meta_tags
+                    .as_ref()
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .map(|s| s.to_lowercase()),
+            );
+            proc.label
+                .to_lowercase()
+                .contains(&filter_text.to_lowercase())
+                || metas.contains(&filter_text.to_lowercase())
+        }
         self.processes
             .iter()
-            .filter(|c| {
+            .filter(|proc| {
                 if let Some(filter_text) = &self.gui_state.filter_text {
-                    // create hashet of config.meta_tags using HashSet::from 
-                    let metas:HashSet<_> = HashSet::from_iter(
-                        c.config.meta_tags
-                            .as_ref()
-                            .unwrap_or(&vec![])
-                            .iter()
-                            .map(|s| s.to_lowercase())
-                    );
-                    return c.label.to_lowercase().contains(&filter_text.to_lowercase()) ||
-                        metas.contains(&filter_text.to_lowercase());
+                    let prefix = &self.config.layout.category_search_prefix;
+                    if filter_text.starts_with(prefix) {
+                        return filter_by_category(&filter_text[prefix.len()..], proc);
+                    }
+                    return filter_by_name_or_meta_tags(filter_text, proc);
                 }
                 true
             })

@@ -11,7 +11,6 @@ use crate::tmux;
 use crate::tmux_context::TmuxContext;
 
 pub struct Controller {
-    pub config: ProcTmuxConfig,
     state: State,
     tmux_context: TmuxContext,
     stdout: RawTerminal<Stdout>,
@@ -19,18 +18,18 @@ pub struct Controller {
 
 impl Controller {
     pub fn new(
-        config: ProcTmuxConfig,
         state: State,
         tmux_context: TmuxContext,
     ) -> Result<Self, Box<dyn Error>> {
         Ok(Controller {
-            config,
             state,
             tmux_context,
             stdout: init_screen()?,
         })
     }
-
+    pub fn get_config(&self) -> &ProcTmuxConfig {
+        &self.state.config
+    }
     pub fn is_entering_filter_text(&self) -> bool {
         self.state.gui_state.entering_filter_text
     }
@@ -71,6 +70,7 @@ impl Controller {
     fn draw_screen(&self) -> Result<(), Box<dyn Error>> {
         draw_screen(&self.stdout, &self.state)
     }
+
     pub fn on_startup(&self) -> Result<(), Box<dyn Error>> {
         self.draw_screen()?;
         self.tmux_context.prepare()?;

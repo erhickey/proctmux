@@ -19,7 +19,7 @@ use args::parse_config_from_args;
 use controller::Controller;
 use daemon::receive_dead_pids;
 use input::input_loop;
-use model::{Process, State};
+use model::{State};
 use tmux_context::TmuxContext;
 use tmux_daemon::TmuxDaemon;
 
@@ -42,15 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.general.kill_existing_session
     )?;
 
-    let state = State::new(
-        config.procs
-            .iter()
-            .enumerate()
-            .map(|(ix, (k, v))| {
-                Process::new(ix + 1, k, v.clone())
-            })
-            .collect()
-    );
+    let state = State::new(&config);
 
     let (sender, receiver) = channel();
 
@@ -59,7 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut tmux_daemon_detached = TmuxDaemon::new(&tmux_context.detached_session_id)?;
     tmux_daemon_detached.listen_for_dead_panes(sender)?;
 
-    let controller = Arc::new(Mutex::new(Controller::new(config, state, tmux_context)?));
+    let controller = Arc::new(Mutex::new(Controller::new(state, tmux_context)?));
     controller.lock().unwrap().on_startup()?;
 
     receive_dead_pids(receiver, controller.clone());
