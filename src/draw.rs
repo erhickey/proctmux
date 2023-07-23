@@ -60,7 +60,7 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
                 "{}{} {} ",
                 cursor::Goto(0, (y_pos + 1) as u16),
                 Fg(color::Yellow),
-                UP
+                DOWN
             )?,
             ProcessStatus::Halted => write!(
                 stdout,

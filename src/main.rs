@@ -54,9 +54,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let (sender, receiver) = channel();
 
-    let mut tmux_daemon_attached = TmuxDaemon::new(&tmux_context.session)?;
+    let mut tmux_daemon_attached = TmuxDaemon::new(&tmux_context.session_id)?;
     tmux_daemon_attached.listen_for_dead_panes(sender.clone())?;
-    let mut tmux_daemon_detached = TmuxDaemon::new(&tmux_context.detached_session)?;
+    let mut tmux_daemon_detached = TmuxDaemon::new(&tmux_context.detached_session_id)?;
     tmux_daemon_detached.listen_for_dead_panes(sender)?;
 
     let controller = Arc::new(Mutex::new(Controller::new(config, state, tmux_context)?));
