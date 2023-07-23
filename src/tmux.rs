@@ -130,7 +130,7 @@ pub fn get_pane_pid(pane_id: &str) -> IoResult<Output> {
         .output()
 }
 
-pub fn command_mode(session_id: &str) -> IoResult<Child> {
+pub fn control_mode(session_id: &str) -> IoResult<Child> {
     Command::new("tmux")
         .arg("-C")
         .arg("attach-session")

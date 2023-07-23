@@ -19,8 +19,8 @@ pub struct TmuxDaemon {
 
 impl TmuxDaemon {
     pub fn new(session_id: &str) -> Result<Self, Box<dyn Error>> {
-        info!("Starting tmux command mode (Session {}) process", session_id);
-        let mut process = tmux::command_mode(session_id)?;
+        info!("Starting tmux control mode (Session {}) process", session_id);
+        let mut process = tmux::control_mode(session_id)?;
         let stdin = process.stdin.take().unwrap();
         let stdout = process.stdout.take();
 
@@ -44,7 +44,7 @@ impl TmuxDaemon {
     }
 
     pub fn kill(&mut self) -> std::io::Result<ExitStatus> {
-        info!("Killing tmux command mode (Session: {}) process", self.session_id);
+        info!("Killing tmux control mode (Session: {}) process", self.session_id);
         self.running.store(false, Ordering::Relaxed);
         self.process.kill()?;
         self.process.wait()  // make sure stdin is closed
