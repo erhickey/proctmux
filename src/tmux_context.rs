@@ -5,29 +5,23 @@ use std::process::Output;
 
 use log::info;
 
-use crate::model::{TmuxAddress, TmuxAddressChange};
 use crate::tmux;
 
 pub struct TmuxContext {
-    pub detached_session: String,
-    pub session: String,
-    window: usize,
-    pane: usize,
+    pane_id: String,
+    pub session_id: String,
+    pub detached_session_id: String,
 }
 
 impl TmuxContext {
     pub fn new(detached_session: &str, kill_existing_session: bool) -> Result<Self, Box<dyn Error>> {
-        let session = match tmux::read_bytes(tmux::current_session()) {
-            Ok(val) => val,
-            Err(e) => panic!("Error: Could not retrieve tmux session id: {}", e),
-        };
-        let window_id = match tmux::read_bytes(tmux::current_window())?.parse() {
-            Ok(val) => val,
-            Err(e) => panic!("Error: Could not retrieve tmux window id: {}", e),
-        };
-        let pane_id = match tmux::read_bytes(tmux::current_pane())?.parse() {
+        let pane_id = match tmux::read_bytes(tmux::current_pane()) {
             Ok(val) => val,
             Err(e) => panic!("Error: Could not retrieve tmux pane id: {}", e),
+        };
+        let session_id = match tmux::read_bytes(tmux::current_session()) {
+            Ok(val) => val,
+            Err(e) => panic!("Error: Could not retrieve tmux session id: {}", e),
         };
 
         let existing_session_names: HashSet<String> = tmux::read_bytes(tmux::list_sessions())?
@@ -35,99 +29,75 @@ impl TmuxContext {
             .map(|s| s.to_string())
             .collect();
 
-        if existing_session_names.contains(detached_session){
-            if kill_existing_session {
-                info!("Killing existing session: {}", detached_session);
-                tmux::kill_session(detached_session)?;
-                tmux::start_detached_session(detached_session)?;
+        let detached_session_id = match {
+            if existing_session_names.contains(detached_session){
+                if kill_existing_session {
+                    info!("Killing existing session: {}", detached_session);
+                    tmux::kill_session(detached_session)?;
+                    tmux::read_bytes(tmux::start_detached_session(detached_session))
+                } else {
+                    panic!("Session '{}' already exists", detached_session);
+                }
             } else {
-                return Err(format!("Session '{}' already exists", detached_session).into());
+                tmux::read_bytes(tmux::start_detached_session(detached_session))
             }
-        } else {
-            tmux::start_detached_session(detached_session)?;
-        }
+        } {
+            Ok(val) => val,
+            Err(e) => panic!("Error: Could not retrieve tmux detached session id: {}", e)
+        };
 
         info!(
-            "creating tmux context: session: {}, detached_session: {}, window_id: {}, pane_id: {}",
-            session,
-            detached_session,
-            window_id,
-            pane_id
+            "creating tmux context: pane_id: {}, session: {}, detached_session: {}",
+            pane_id,
+            session_id,
+            detached_session_id,
         );
 
         Ok(TmuxContext {
-            detached_session: detached_session.to_string(),
-            session,
-            window: window_id,
-            pane: pane_id,
+            pane_id,
+            session_id,
+            detached_session_id,
         })
     }
 
     pub fn prepare(&self) -> IoResult<Output> {
-        tmux::set_remain_on_exit(&self.session, self.window, true)
+        tmux::set_remain_on_exit(&self.pane_id, true)
     }
 
     pub fn cleanup(&self) -> IoResult<Output> {
-        tmux::kill_session(&self.detached_session)?;
-        tmux::set_remain_on_exit(&self.session, self.window, false)
+        let output = tmux::kill_session(&self.detached_session_id);
+        tmux::set_remain_on_exit(&self.pane_id, false)?;
+        output
     }
 
     pub fn break_pane(
         &self,
-        source_pane: usize,
+        pane_id: &str,
         dest_window: usize,
         window_label: &str,
-    ) -> Result<TmuxAddressChange, Box<dyn Error>> {
+    ) -> IoResult<Output> {
         info!(
-            "breaking pane: source_pane: {}, dest_window: {}, window_label: {}",
-            source_pane,
+            "breaking pane: pane_id: {}, dest_window: {}, window_label: {}",
+            pane_id,
             dest_window,
             window_label
         );
-
-        let pane_id = tmux::read_bytes(tmux::break_pane(
-            &self.session,
-            self.window,
-            source_pane,
-            &self.detached_session,
-            dest_window,
-            window_label)
-        )?.parse().unwrap_or(0);
-
-        tmux::set_remain_on_exit(&self.detached_session, dest_window, true)?;
-
-        Ok(TmuxAddressChange {
-            new_address: TmuxAddress::new(&self.detached_session, dest_window, Some(pane_id)),
-            old_address: TmuxAddress::new(&self.session, self.window, Some(source_pane)),
-        })
+        let output = tmux::break_pane(pane_id, &self.detached_session_id, dest_window, window_label);
+        tmux::set_remain_on_exit(pane_id, true)?;
+        output
     }
 
-    pub fn join_pane(&self, target_window: usize) -> IoResult<TmuxAddress> {
-        info!("Joining window: {} to session: {}", target_window, self.session);
-
-        tmux::join_pane(
-            &self.detached_session,
-            target_window,
-            &self.session,
-            self.window,
-            self.pane
-        )?;
-
-        Ok(TmuxAddress::new(&self.session, self.window, Some(self.pane + 1)))
+    pub fn join_pane(&self, pane_id: &str) -> IoResult<Output> {
+        info!("Joining pane_id: {} to pane_id: {}", pane_id, self.pane_id);
+        tmux::join_pane(pane_id, &self.pane_id)
     }
 
-    pub fn kill_pane(&self, pane: usize) -> IoResult<Output> {
-        tmux::kill_pane(&self.session, self.window, pane)
-    }
-
-    pub fn create_pane(&self, command: &str) -> Result<TmuxAddress, Box<dyn Error>> {
+    pub fn create_pane(&self, command: &str) -> Result<String, Box<dyn Error>> {
         info!("Creating pane: {}", command);
-        let pane_id = tmux::read_bytes(tmux::create_pane(&self.session, self.window, self.pane, command))?.parse()?;
-        info!("Pane created: {}", pane_id);
-        Ok(TmuxAddress::new(&self.session, self.window, Some(pane_id)))
+        tmux::read_bytes(tmux::create_pane(&self.pane_id, command))
     }
 
-    pub fn get_pane_pid(&self, pane: usize) -> Result<i32, Box<dyn Error>> {
-        Ok(tmux::read_bytes(tmux::get_pane_pid(&self.session, self.window, pane))?.parse()?)
+    pub fn get_pane_pid(&self, pane_id: &str) -> Result<i32, Box<dyn Error>> {
+        Ok(tmux::read_bytes(tmux::get_pane_pid(pane_id))?.parse()?)
     }
 }
