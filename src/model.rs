@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::config::ProcessConfig;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -82,7 +84,16 @@ impl State {
             .iter()
             .filter(|c| {
                 if let Some(filter_text) = &self.gui_state.filter_text {
-                    return c.label.to_lowercase().contains(&filter_text.to_lowercase());
+                    // create hashet of config.meta_tags using HashSet::from 
+                    let metas:HashSet<_> = HashSet::from_iter(
+                        c.config.meta_tags
+                            .as_ref()
+                            .unwrap_or(&vec![])
+                            .iter()
+                            .map(|s| s.to_lowercase())
+                    );
+                    return c.label.to_lowercase().contains(&filter_text.to_lowercase()) ||
+                        metas.contains(&filter_text.to_lowercase());
                 }
                 true
             })
