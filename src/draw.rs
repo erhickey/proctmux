@@ -5,6 +5,7 @@ use termion::{clear, cursor, style, terminal_size};
 use termion::color::{Bg, Fg, self};
 use termion:: raw::{IntoRawMode, RawTerminal};
 
+use crate::config::ProcTmuxConfig;
 use crate::model::{ProcessStatus, State};
 
 const UP: char = '▲';
@@ -80,7 +81,7 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
                 style::Bold,
                 c.label,
                 style::Reset,
-                width = 20
+                width = state.config.layout.process_list_width 
             )?;
         } else {
             write!(stdout, "{}{}{}", Fg(color::Cyan), c.label, style::Reset)?;

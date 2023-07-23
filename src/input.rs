@@ -8,7 +8,7 @@ use crate::config::KeybindingConfig;
 use crate::controller::Controller;
 
 pub fn input_loop(controller: Arc<Mutex<Controller>>) -> Result<(), Box<dyn Error>> {
-    let keybinding = controller.lock().unwrap().config.keybinding.clone();
+    let keybinding = controller.lock().unwrap().get_config().keybinding.clone();
     let stdin = stdin();
 
     for c in stdin.keys() {

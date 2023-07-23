@@ -14,14 +14,23 @@ fn default_general() -> GeneralConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct ProcTmuxConfig {
+fn default_layout() -> LayoutConfig {
+    LayoutConfig {
+        process_list_width: default_process_list_width(),
+        sort_prcess_list_alpha: default_sort_process_list_alpha(),
+        category_search_prefix: default_category_search_prefix(),
+    }
+}
 
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
+pub struct ProcTmuxConfig {
     #[serde(default = "default_general")]
     pub general: GeneralConfig,
     pub procs: HashMap<String, ProcessConfig>,
     pub keybinding: KeybindingConfig,
     pub log_file: String,
+    #[serde(default = "default_layout")]
+    pub layout: LayoutConfig
 }
 
 fn default_kill_signal() -> String {
@@ -69,7 +78,7 @@ where
     }).collect();
     Ok(new_codes)
 }
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
 pub struct KeybindingConfig {
     // quit: List[str] = field(default_factory=lambda: ['q'])
     // filter: List[str] = field(default_factory=lambda: ['/'])
@@ -115,7 +124,7 @@ pub struct KeybindingConfig {
 }
 
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq)]
 pub struct ProcessConfig{
     #[serde(default = "default_autostart")]
     pub autostart: bool,
@@ -141,7 +150,7 @@ fn default_kill_existing_session() -> bool {
     false
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
 pub struct GeneralConfig{
     #[serde(default = "default_detached_session_name")]
     pub detached_session_name: String,
@@ -149,6 +158,44 @@ pub struct GeneralConfig{
     pub kill_existing_session: bool,
 }
 
+// fn default_hide_help() -> bool {
+//     false
+// }
+
+// fn hide_process_description_panel() -> bool {
+//     false
+// }
+
+fn default_process_list_width() -> usize {
+    31
+}
+
+fn default_sort_process_list_alpha() -> bool {
+    true 
+}
+
+fn default_category_search_prefix() -> String {
+    "cat:".to_string()
+}
+
+// fn default_field_replacement_prompt() -> String {
+//     "__FIELD_NAME__ ⮕  ".to_string()
+// }
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
+pub struct LayoutConfig {
+    // #[serde(default = "default_hide_help")]
+    // pub hide_help: bool,
+    // #[serde(default = "hide_process_description_panel")]
+    // pub hide_process_description_panel: bool,
+    #[serde(default = "default_process_list_width")]
+    pub process_list_width: usize,
+    #[serde(default = "default_sort_process_list_alpha")]
+    pub sort_prcess_list_alpha: bool,
+    #[serde(default = "default_category_search_prefix")]
+    pub category_search_prefix: String,
+    // #[serde(default = "default_field_replacement_prompt")]
+    // field_replacement_prompt: str = '__FIELD_NAME__ ⮕  '
+}
 
 #[cfg(test)]
 mod tests {
