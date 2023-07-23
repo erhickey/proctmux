@@ -22,6 +22,17 @@ fn default_layout() -> LayoutConfig {
     }
 }
 
+fn default_style() -> StyleConfig {
+    StyleConfig { 
+        selected_process_color: default_selected_process_color(), 
+        selected_process_bg_color: default_selected_process_bg_color(), 
+        unselected_process_color: default_unselected_process_color(), 
+        status_running_color: default_status_running_color(), 
+        status_stopped_color: default_status_stopped_color(),
+        status_halting_color: default_status_halting_color()
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
 pub struct ProcTmuxConfig {
     #[serde(default = "default_general")]
@@ -30,7 +41,9 @@ pub struct ProcTmuxConfig {
     pub keybinding: KeybindingConfig,
     pub log_file: String,
     #[serde(default = "default_layout")]
-    pub layout: LayoutConfig
+    pub layout: LayoutConfig,
+    #[serde(default = "default_style")]
+    pub style: StyleConfig 
 }
 
 fn default_kill_signal() -> String {
@@ -195,6 +208,50 @@ pub struct LayoutConfig {
     pub category_search_prefix: String,
     // #[serde(default = "default_field_replacement_prompt")]
     // field_replacement_prompt: str = '__FIELD_NAME__ ⮕  '
+}
+
+
+fn default_selected_process_color() -> String {
+    "ansiblack".to_string()
+}
+
+fn default_selected_process_bg_color() -> String {
+    "ansimagenta".to_string()
+}
+
+fn default_unselected_process_color() -> String {
+    "ansiblue".to_string()
+}
+
+fn default_status_running_color() -> String {
+    "ansigreen".to_string()
+} 
+
+fn default_status_stopped_color() -> String {
+    "ansired".to_string()
+}
+
+fn default_status_halting_color() -> String {
+    "ansiyellow".to_string()
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
+pub struct StyleConfig {
+    #[serde(default = "default_selected_process_color")]
+    pub selected_process_color: String,
+    #[serde(default = "default_selected_process_bg_color")]
+    pub selected_process_bg_color: String,
+    #[serde(default = "default_unselected_process_color")]
+    pub unselected_process_color: String,
+    #[serde(default = "default_status_running_color")]
+    pub status_running_color: String,
+    #[serde(default = "default_status_stopped_color")]
+    pub status_stopped_color: String,
+    // pub placeholder_terminal_bg_color: String,
+
+    #[serde(default = "default_status_halting_color")]
+    pub status_halting_color: String,
+
 }
 
 #[cfg(test)]

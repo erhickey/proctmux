@@ -19,7 +19,7 @@ use args::parse_config_from_args;
 use controller::Controller;
 use daemon::receive_dead_pids;
 use input::input_loop;
-use model::{Process, State};
+use model::{State};
 use tmux_context::TmuxContext;
 use tmux_daemon::TmuxDaemon;
 
