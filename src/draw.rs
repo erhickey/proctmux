@@ -71,7 +71,7 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
             )?,
         }
 
-        if state.current_selection == c.id {
+        if state.current_proc_id == c.id {
             write!(
                 stdout,
                 "{}{}{}{:width$}{}",

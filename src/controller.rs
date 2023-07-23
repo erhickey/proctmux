@@ -6,7 +6,7 @@ use termion::raw::RawTerminal;
 
 use crate::config::ProcTmuxConfig;
 use crate::draw::{draw_screen, init_screen, prepare_screen_for_exit};
-use crate::model::{ProcessStatus, State, StateMutation, GUIStateMutation, Mutator};
+use crate::model::{GUIStateMutation, Mutator, ProcessStatus, State, StateMutation};
 use crate::tmux;
 use crate::tmux_context::TmuxContext;
 
@@ -34,11 +34,11 @@ impl Controller {
     pub fn is_entering_filter_text(&self) -> bool {
         self.state.gui_state.entering_filter_text
     }
-    
+
     pub fn get_filter_text(&self) -> Option<String> {
         self.state.gui_state.filter_text.clone()
     }
-    
+
     pub fn on_filter_start(&mut self) -> Result<(), Box<dyn Error>> {
         let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
             .start_entering_filter()
@@ -57,7 +57,7 @@ impl Controller {
             .commit();
         self.draw_screen()
     }
-    
+
     pub fn on_filter_set(&mut self, new_filter_text: Option<String>) -> Result<(), Box<dyn Error>> {
         let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
             .set_filter_text(new_filter_text)
@@ -153,7 +153,7 @@ impl Controller {
     //                 if let Ok(pid) = self.tmux_context.get_pane_pid(pane_id) {
     //                     return (process.id, Some(pid))
     //                 }
-    //             } 
+    //             }
     //         }
     //         (process.id, None)
     //     }).collect();
@@ -174,23 +174,30 @@ impl Controller {
     }
 
     pub fn break_pane(&mut self) {
-        let process = self.state.current_process();
-        if let Some(pane_id) = &process.pane_id {
-            // TODO: log error?
-            let _ = self.tmux_context.break_pane(pane_id, process.id, &process.label);
+        if let Some(process) = self.state.current_process() {
+            if let Some(pane_id) = &process.pane_id {
+                // TODO: log error?
+                let _ = self
+                    .tmux_context
+                    .break_pane(pane_id, process.id, &process.label);
+            }
         }
     }
 
     pub fn join_pane(&mut self) {
-        let process = self.state.current_process();
-        if let Some(pane_id) = &process.pane_id {
-            // TODO: log error?
-            let _ = self.tmux_context.join_pane(pane_id);
+        if let Some(process) = self.state.current_process() {
+            if let Some(pane_id) = &process.pane_id {
+                // TODO: log error?
+                let _ = self.tmux_context.join_pane(pane_id);
+            }
         }
     }
 
     pub fn start_process(&mut self) -> Option<i32> {
-        let process = self.state.current_process().clone();
+        if self.state.current_process().is_none() {
+            return None;
+        }
+        let process = self.state.current_process().unwrap().clone();
 
         if process.status != ProcessStatus::Halted {
             return None;
@@ -202,39 +209,44 @@ impl Controller {
         if let Some(pane_id) = &process.pane_id {
             match tmux::kill_pane(pane_id) {
                 Ok(_) => {
-                    let sm = StateMutation::on(self.state.clone()).set_process_pane_id(None, process.id);
+                    let sm =
+                        StateMutation::on(self.state.clone()).set_process_pane_id(None, process.id);
                     self.state = sm.commit();
-                },
-                Err(_) => {}  // TODO: log error?
+                }
+                Err(_) => {} // TODO: log error?
             }
         }
 
         match self.tmux_context.create_pane(&process.command()) {
             Ok(pane_id) => {
                 let pid = self.tmux_context.get_pane_pid(&pane_id).ok();
-                info!("Started {} process, pid: {}", process.label, pid.unwrap_or(-1));
+                info!(
+                    "Started {} process, pid: {}",
+                    process.label,
+                    pid.unwrap_or(-1)
+                );
                 state_mutation = state_mutation
                     .set_process_pane_id(Some(pane_id), process.id)
                     .set_process_pid(pid, process.id);
                 self.state = state_mutation.commit();
                 pid
-            },
-            Err(_) => None  // TODO: handle this, maybe just log it?
+            }
+            Err(_) => None, // TODO: handle this, maybe just log it?
         }
     }
 
     pub fn halt_process(&mut self) {
-        let process = self.state.current_process();
+        if let Some(process) = self.state.current_process() {
+            if process.status != ProcessStatus::Running {
+                return;
+            }
 
-        if process.status != ProcessStatus::Running {
-            return;
-        }
-
-        if let Some(pid) = process.pid {
-            unsafe { libc::kill(pid, libc::SIGKILL) };
-            self.state = StateMutation::on(self.state.clone())
-                .set_process_status(ProcessStatus::Halting, process.id)
-                .commit();
+            if let Some(pid) = process.pid {
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+                self.state = StateMutation::on(self.state.clone())
+                    .set_process_status(ProcessStatus::Halting, process.id)
+                    .commit();
+            }
         }
     }
 }
