@@ -44,13 +44,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut tmux_daemon_attached = TmuxDaemon::new(&tmux_context.session_id)?;
     let mut tmux_daemon_detached = TmuxDaemon::new(&tmux_context.detached_session_id)?;
-
     let state = State::new(&config);
-
     let controller = Arc::new(Mutex::new(Controller::new(state, tmux_context)?));
-    controller.lock().unwrap().on_startup()?;
-
     let (sender, receiver) = channel();
+
     receive_dead_pids(receiver, controller.clone());
 
     /*
@@ -76,9 +73,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     * If a tmux bug is identified/fixed this timing should no longer be a concern,
     * listen_for_dead_panes should be callable immediately after instantiating a TmuxDaemon.
     */
+    std::thread::sleep(std::time::Duration::from_millis(5));
     tmux_daemon_attached.listen_for_dead_panes(sender.clone())?;
     tmux_daemon_detached.listen_for_dead_panes(sender)?;
 
+    controller.lock().unwrap().on_startup()?;
     input_loop(controller.clone())?;
 
     tmux_daemon_attached.kill()?;

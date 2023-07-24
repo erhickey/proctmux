@@ -78,10 +78,14 @@ impl State {
         }
     }
 
-    pub fn current_process(&self) -> Option<&Process> {
+    pub fn get_process(&self, process_id: usize) -> Option<&Process> {
         self.processes
             .iter()
-            .find(|proc| proc.id == self.current_proc_id)
+            .find(|proc| proc.id == process_id)
+    }
+
+    pub fn current_process(&self) -> Option<&Process> {
+        self.get_process(self.current_proc_id)
     }
 
     pub fn get_filtered_processes(&self) -> Vec<&Process> {
@@ -190,6 +194,7 @@ impl StateMutation {
         }
         self
     }
+
     fn move_process_selection(mut self, direction: i8) -> Self {
         let filtered_procs = self.init_state.get_filtered_processes();
         if filtered_procs.is_empty() {
@@ -214,6 +219,7 @@ impl StateMutation {
         }
         self
     }
+
     pub fn next_process(self) -> Self {
         self.move_process_selection(1)
     }

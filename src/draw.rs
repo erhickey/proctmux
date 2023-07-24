@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::io::{stdout, Stdout, Write};
 
-use termion::color::{self, AnsiValue, Bg, Color, Fg};
+use termion::color::{self, Bg, Color, Fg};
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::{clear, cursor, style, terminal_size};
 

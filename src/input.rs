@@ -30,10 +30,10 @@ fn handle_filter_entry_keypresses(
 ) -> Result<(), Box<dyn Error>> {
     match pressed_key {
         Ok(key) => {
-            if matches_key(key, &keybinding.filter_submit) {
+            if keybinding.filter_submit.contains(&key) {
                 controller.lock().unwrap().on_filter_done()?;
                 info!("filter done");
-            } else if matches_key(key, &keybinding.filter) {
+            } else if keybinding.filter.contains(&key) {
                 controller.lock().unwrap().on_filter_set(None)?;
                 info!("cancelled filter");
                 controller.lock().unwrap().on_filter_done()?;
@@ -69,32 +69,27 @@ fn handle_normal_mode_keypresses(
 ) -> Result<bool, Box<dyn Error>> {
     match pressed_key {
         Ok(key) => {
-            if matches_key(key, &keybinding.quit) {
+            if keybinding.quit.contains(&key) {
                 controller.lock().unwrap().on_keypress_quit()?;
                 return Ok(true);
-            } else if matches_key(key, &keybinding.down) {
+            } else if keybinding.down.contains(&key) {
                 controller.lock().unwrap().on_keypress_down()?;
-            } else if matches_key(key, &keybinding.up) {
+            } else if keybinding.up.contains(&key) {
                 controller.lock().unwrap().on_keypress_up()?;
-            } else if matches_key(key, &keybinding.start) {
+            } else if keybinding.start.contains(&key) {
                 controller.lock().unwrap().on_keypress_start()?;
-            } else if matches_key(key, &keybinding.stop) {
+            } else if keybinding.stop.contains(&key) {
                 controller.lock().unwrap().on_keypress_stop()?;
-            } else if matches_key(key, &keybinding.filter) {
+            } else if keybinding.filter.contains(&key) {
                 controller.lock().unwrap().on_filter_start()?;
+            } else if keybinding.switch_focus.contains(&key) {
+                controller.lock().unwrap().on_keypress_switch_focus()?;
             }
+
         }
         Err(e) => {
             controller.lock().unwrap().on_error(Box::new(e));
         }
     }
     Ok(false)
-}
-
-
-fn matches_key(key: Key, acceptable_keys: &[String]) -> bool {
-    match key {
-        Key::Char(c) => acceptable_keys.contains(&c.to_string()),
-        _ => false,
-    }
 }

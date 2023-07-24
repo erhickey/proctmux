@@ -1,6 +1,7 @@
 use std::{collections::HashMap, env, path::PathBuf};
 
 use serde::{Deserialize, Serialize, Deserializer};
+use termion::event::Key;
 
 fn get_current_working_dir() -> std::io::Result<PathBuf> {
     env::current_dir()
@@ -57,40 +58,76 @@ fn current_working_dir() -> String {
 fn default_autostart() -> bool {
     false
 }
-fn default_quit_keybinding() -> Vec<String> {
-    vec!["q".to_string()]
+fn default_quit_keybinding() -> Vec<Key> {
+    vec![Key::Char('q')]
 }
-fn default_start_keybinding() -> Vec<String> {
-    vec!["s".to_string()]
+fn default_start_keybinding() -> Vec<Key> {
+    vec![Key::Char('s')]
 }
-fn default_stop_keybinding() -> Vec<String> {
-    vec!["x".to_string()]
+fn default_stop_keybinding() -> Vec<Key> {
+    vec![Key::Char('x')]
 }
-fn default_up_keybinding() -> Vec<String> {
-    vec!["up".to_string(), "k".to_string()]
+fn default_up_keybinding() -> Vec<Key> {
+    vec![Key::Char('k'), Key::Up]
 }
-fn default_down_keybinding() -> Vec<String> {
-    vec!["down".to_string(), "j".to_string()]
+fn default_down_keybinding() -> Vec<Key> {
+    vec![Key::Char('j'), Key::Down]
 }
-fn default_filter_keybinding() -> Vec<String> {
-    vec!["/".to_string()]
+fn default_filter_keybinding() -> Vec<Key> {
+    vec![Key::Char('/')]
 }
-fn default_filter_submit_keybinding() -> Vec<String> {
-    vec!["\n".to_string()]
+fn default_filter_submit_keybinding() -> Vec<Key> {
+    vec![Key::Char('\n')]
 }
-fn deserialize_keybinding_notation<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+fn default_switch_focus_submit_keybinding() -> Vec<Key> {
+    vec![Key::Ctrl('w')]
+}
+fn deserialize_keybinding_notation<'de, D>(deserializer: D) -> Result<Vec<Key>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    // map any textual representations of keybinding 
-    // characters into the stdin characters that need to be detected 
+    // map any textual representations of keybinding
+    // characters into the stdin characters that need to be detected
     let key_codes: Vec<String> = Deserialize::deserialize(deserializer)?;
-    let new_codes = key_codes.iter().map(|key| {
-        if key.to_lowercase().eq("enter") {
-            return "\n".to_string() 
-        }
-        key.to_string()
-    }).collect();
+    let new_codes = key_codes
+        .iter()
+        .map(|key| {
+            if key.to_lowercase().eq("enter") {
+                return Key::Char('\n')
+            }
+            if key.to_lowercase().eq("esc") {
+                return Key::Esc
+            }
+            if key.to_lowercase().eq("up") {
+                return Key::Up
+            }
+            if key.to_lowercase().eq("down") {
+                return Key::Down
+            }
+            if key.to_lowercase().eq("left") {
+                return Key::Left
+            }
+            if key.to_lowercase().eq("right") {
+                return Key::Right
+            }
+            if key.to_lowercase().starts_with("a-") && key.len() == 3 {
+                if let Some(c) = key.chars().nth(2) {
+                    return Key::Alt(c)
+                }
+            }
+            if key.to_lowercase().starts_with("c-") && key.len() == 3 {
+                if let Some(c) = key.chars().nth(2) {
+                    return Key::Ctrl(c)
+                }
+            }
+            if key.len() == 1 {
+                if let Some(c) = key.chars().nth(0) {
+                    return Key::Char(c)
+                }
+            }
+            panic!("Could not deserialize key: {}", key);
+        })
+        .collect();
     Ok(new_codes)
 }
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
@@ -123,19 +160,21 @@ pub struct KeybindingConfig {
     // docs: Option<Vec<String>>,
 
     #[serde(default = "default_quit_keybinding", deserialize_with = "deserialize_keybinding_notation")]
-    pub quit: Vec<String>,
+    pub quit: Vec<Key>,
     #[serde(default = "default_start_keybinding", deserialize_with = "deserialize_keybinding_notation")]
-    pub start: Vec<String>,
+    pub start: Vec<Key>,
     #[serde(default = "default_stop_keybinding",deserialize_with = "deserialize_keybinding_notation")]
-    pub stop: Vec<String>,
+    pub stop: Vec<Key>,
     #[serde(default = "default_up_keybinding",deserialize_with = "deserialize_keybinding_notation")]
-    pub up: Vec<String>,
+    pub up: Vec<Key>,
     #[serde(default = "default_down_keybinding" ,deserialize_with = "deserialize_keybinding_notation")]
-    pub down: Vec<String>,
+    pub down: Vec<Key>,
     #[serde(default = "default_filter_keybinding", deserialize_with = "deserialize_keybinding_notation")]
-    pub filter: Vec<String>,
+    pub filter: Vec<Key>,
     #[serde(default = "default_filter_submit_keybinding", deserialize_with = "deserialize_keybinding_notation")]
-    pub filter_submit: Vec<String>,
+    pub filter_submit: Vec<Key>,
+    #[serde(default = "default_switch_focus_submit_keybinding", deserialize_with = "deserialize_keybinding_notation")]
+    pub switch_focus: Vec<Key>,
 }
 
 
