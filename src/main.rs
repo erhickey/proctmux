@@ -1,13 +1,13 @@
 mod args;
 mod config;
 mod controller;
+mod daemon;
 mod draw;
 mod input;
 mod model;
 mod tmux;
 mod tmux_context;
 mod tmux_daemon;
-mod daemon;
 
 use std::error::Error;
 use std::sync::mpsc::channel;
@@ -19,7 +19,7 @@ use args::parse_config_from_args;
 use controller::Controller;
 use daemon::receive_dead_pids;
 use input::input_loop;
-use model::{State};
+use model::State;
 use tmux_context::TmuxContext;
 use tmux_daemon::TmuxDaemon;
 
@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let tmux_context = TmuxContext::new(
         &config.general.detached_session_name,
-        config.general.kill_existing_session
+        config.general.kill_existing_session,
     )?;
 
     let mut tmux_daemon_attached = TmuxDaemon::new(&tmux_context.session_id)?;

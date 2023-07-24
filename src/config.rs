@@ -16,6 +16,8 @@ fn default_general() -> GeneralConfig {
 
 fn default_layout() -> LayoutConfig {
     LayoutConfig {
+        hide_help: default_hide_help(),
+        hide_process_description_panel: default_hide_process_description_panel(),
         process_list_width: default_process_list_width(),
         sort_prcess_list_alpha: default_sort_process_list_alpha(),
         category_search_prefix: default_category_search_prefix(),
@@ -171,13 +173,13 @@ pub struct GeneralConfig{
     pub kill_existing_session: bool,
 }
 
-// fn default_hide_help() -> bool {
-//     false
-// }
+fn default_hide_help() -> bool {
+    false
+}
 
-// fn hide_process_description_panel() -> bool {
-//     false
-// }
+fn default_hide_process_description_panel() -> bool {
+    false
+}
 
 fn default_process_list_width() -> usize {
     31
@@ -196,10 +198,10 @@ fn default_category_search_prefix() -> String {
 // }
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
 pub struct LayoutConfig {
-    // #[serde(default = "default_hide_help")]
-    // pub hide_help: bool,
-    // #[serde(default = "hide_process_description_panel")]
-    // pub hide_process_description_panel: bool,
+    #[serde(default = "default_hide_help")]
+    pub hide_help: bool,
+    #[serde(default = "default_hide_process_description_panel")]
+    pub hide_process_description_panel: bool,
     #[serde(default = "default_process_list_width")]
     pub process_list_width: usize,
     #[serde(default = "default_sort_process_list_alpha")]

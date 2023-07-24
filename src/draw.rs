@@ -1,12 +1,11 @@
 use std::error::Error;
 use std::io::{stdout, Stdout, Write};
-use std::str::FromStr;
 
-use termion::color::{self, Bg, Color, Fg};
+use termion::color::{self, AnsiValue, Bg, Color, Fg};
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::{clear, cursor, style, terminal_size};
 
-use crate::model::{ProcessStatus, State};
+use crate::model::{Process, ProcessStatus, State};
 
 const UP: char = '▲';
 const DOWN: char = '▼';
@@ -65,6 +64,43 @@ pub fn prepare_screen_for_exit(mut stdout: &Stdout) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
+fn get_status_arrow_and_color(state: &State, process: &Process) -> (Box<dyn Color>, char) {
+    match process.status {
+        ProcessStatus::Running => {
+            let fg = color_from_config_string(&state.config.style.status_running_color)
+                .unwrap_or(Box::new(color::Green));
+            (fg, UP)
+        }
+        ProcessStatus::Halting => {
+            let fg = color_from_config_string(&state.config.style.status_halting_color)
+                .unwrap_or(Box::new(color::Yellow));
+            (fg, DOWN)
+        }
+        ProcessStatus::Halted => {
+            let fg = color_from_config_string(&state.config.style.status_stopped_color)
+                .unwrap_or(Box::new(color::Red));
+            (fg, DOWN)
+        }
+    }
+}
+
+pub fn print_messages(
+    mut stdout: &Stdout,
+    msgs: &[(Box<dyn Color>, String)],
+) -> Result<(), Box<dyn Error>> {
+    let (_, height) = terminal_size()?;
+    for (idx, color_and_msg) in msgs.iter().enumerate() {
+        let (color, msg) = color_and_msg;
+        write!(
+            stdout,
+            "{}{}{}",
+            cursor::Goto(0, height - idx as u16),
+            Fg(color.as_ref()),
+            msg
+        )?;
+    }
+    Ok(())
+}
 pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Error>> {
     write!(stdout, "{}", clear::All)?;
     let mut y_offset = 1;
@@ -87,25 +123,9 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
         y_offset += 1;
     }
 
-    for (ix, c) in state.get_filtered_processes().iter().enumerate() {
+    for (ix, proc) in state.get_filtered_processes().iter().enumerate() {
         let y_pos = ix + y_offset;
-        let (fg, arrow) = match c.status {
-            ProcessStatus::Running => {
-                let fg = color_from_config_string(&state.config.style.status_running_color)
-                    .unwrap_or(Box::new(color::Green));
-                (fg, UP)
-            }
-            ProcessStatus::Halting => {
-                let fg = color_from_config_string(&state.config.style.status_halting_color)
-                    .unwrap_or(Box::new(color::Yellow));
-                (fg, DOWN)
-            }
-            ProcessStatus::Halted => {
-                let fg = color_from_config_string(&state.config.style.status_stopped_color)
-                    .unwrap_or(Box::new(color::Red));
-                (fg, DOWN)
-            }
-        };
+        let (fg, arrow) = get_status_arrow_and_color(state, proc);
         write!(
             stdout,
             "{}{} {} ",
@@ -114,7 +134,7 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
             arrow
         )?;
 
-        if state.current_proc_id == c.id {
+        if state.current_proc_id == proc.id {
             let bg = color_from_config_string(&state.config.style.selected_process_bg_color)
                 .unwrap_or(Box::new(color::LightMagenta));
             let fg = color_from_config_string(&state.config.style.selected_process_color)
@@ -125,27 +145,33 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
                 Bg(bg.as_ref()),
                 Fg(fg.as_ref()),
                 style::Bold,
-                c.label,
+                proc.label,
                 style::Reset,
                 width = state.config.layout.process_list_width
             )?;
         } else {
             let fg = color_from_config_string(&state.config.style.unselected_process_color)
                 .unwrap_or(Box::new(color::Cyan));
-            write!(stdout, "{}{}{}", Fg(fg.as_ref()), c.label, style::Reset)?;
+            write!(stdout, "{}{}{}", Fg(fg.as_ref()), proc.label, style::Reset)?;
         }
     }
-
-    for (ix, msg) in state.gui_state.messages.iter().enumerate() {
-        let (_, height) = terminal_size()?;
-        write!(
-            stdout,
-            "{}{}{}",
-            cursor::Goto(0, height - ix as u16),
-            Fg(color::Red),
-            msg
-        )?;
+    let current_proc = state.current_process();
+    let mut all_msgs: Vec<(Box<dyn Color>, String)> = vec![];
+    // add process descriptions / short-help text
+    if !state.config.layout.hide_help {
+        if let Some(current_proc) = current_proc {
+            let desc = &current_proc.config.description;
+            all_msgs.push((Box::new(color::White) as Box<dyn Color>, desc.clone().unwrap_or("".to_string())));
+        }
     }
+    // add error messages
+    state
+        .gui_state
+        .messages
+        .iter()
+        .map(|m| (Box::new(color::Red) as Box<dyn Color>, m.to_string()))
+        .for_each(|m| all_msgs.push(m));
+    print_messages(stdout, all_msgs.as_slice())?;
 
     stdout.flush()?;
     Ok(())
