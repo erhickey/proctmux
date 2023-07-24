@@ -5,7 +5,8 @@ use termion::color::{self, Bg, Color, Fg};
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::{clear, cursor, style, terminal_size};
 
-use crate::model::{Process, ProcessStatus, State};
+use crate::process::{Process, ProcessStatus};
+use crate::state::State;
 
 const UP: char = '▲';
 const DOWN: char = '▼';

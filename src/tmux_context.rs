@@ -3,12 +3,10 @@ use std::error::Error;
 use std::io::Result as IoResult;
 use std::process::Output;
 
-use log::info;
-
 use crate::tmux;
 
 pub struct TmuxContext {
-    pane_id: String,
+    pub pane_id: String,
     pub session_id: String,
     pub detached_session_id: String,
 }
@@ -76,7 +74,7 @@ impl TmuxContext {
         dest_window: usize,
         window_label: &str,
     ) -> IoResult<Output> {
-        info!(
+        trace!(
             "breaking pane: pane_id: {}, dest_window: {}, window_label: {}",
             pane_id,
             dest_window,
@@ -88,12 +86,12 @@ impl TmuxContext {
     }
 
     pub fn join_pane(&self, pane_id: &str) -> IoResult<Output> {
-        info!("Joining pane_id: {} to pane_id: {}", pane_id, self.pane_id);
+        trace!("Joining pane_id: {} to pane_id: {}", pane_id, self.pane_id);
         tmux::join_pane(pane_id, &self.pane_id)
     }
 
     pub fn create_pane(&self, command: &str) -> Result<String, Box<dyn Error>> {
-        info!("Creating pane: {}", command);
+        trace!("Creating pane: {}", command);
         tmux::read_bytes(tmux::create_pane(&self.pane_id, command))
     }
 
@@ -107,6 +105,7 @@ impl TmuxContext {
         window_label: &str,
         command: &str
     ) -> Result<String, Box<dyn Error>> {
+        trace!("Creating detached pane: {}", window_label);
         let output = tmux::read_bytes(
             tmux::create_detached_pane(&self.detached_session_id, dest_window, window_label, &command)
         );

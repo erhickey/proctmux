@@ -26,11 +26,11 @@ fn default_layout() -> LayoutConfig {
 }
 
 fn default_style() -> StyleConfig {
-    StyleConfig { 
-        selected_process_color: default_selected_process_color(), 
-        selected_process_bg_color: default_selected_process_bg_color(), 
-        unselected_process_color: default_unselected_process_color(), 
-        status_running_color: default_status_running_color(), 
+    StyleConfig {
+        selected_process_color: default_selected_process_color(),
+        selected_process_bg_color: default_selected_process_bg_color(),
+        unselected_process_color: default_unselected_process_color(),
+        status_running_color: default_status_running_color(),
         status_stopped_color: default_status_stopped_color(),
         status_halting_color: default_status_halting_color()
     }
@@ -46,7 +46,7 @@ pub struct ProcTmuxConfig {
     #[serde(default = "default_layout")]
     pub layout: LayoutConfig,
     #[serde(default = "default_style")]
-    pub style: StyleConfig 
+    pub style: StyleConfig
 }
 
 fn default_kill_signal() -> String {
@@ -56,6 +56,9 @@ fn current_working_dir() -> String {
     get_current_working_dir().unwrap().to_str().unwrap().to_string()
 }
 fn default_autostart() -> bool {
+    false
+}
+fn default_autofocus() -> bool {
     false
 }
 fn default_quit_keybinding() -> Vec<Key> {
@@ -182,6 +185,8 @@ pub struct KeybindingConfig {
 pub struct ProcessConfig{
     #[serde(default = "default_autostart")]
     pub autostart: bool,
+    #[serde(default = "default_autofocus")]
+    pub autofocus: bool,
     pub shell: Option<String>,
     pub cmd: Option<Vec<String>>,
     #[serde(default = "current_working_dir")]
@@ -225,7 +230,7 @@ fn default_process_list_width() -> usize {
 }
 
 fn default_sort_process_list_alpha() -> bool {
-    true 
+    true
 }
 
 fn default_category_search_prefix() -> String {
@@ -266,7 +271,7 @@ fn default_unselected_process_color() -> String {
 
 fn default_status_running_color() -> String {
     "ansigreen".to_string()
-} 
+}
 
 fn default_status_stopped_color() -> String {
     "ansired".to_string()

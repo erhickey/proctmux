@@ -1,55 +1,8 @@
 use std::collections::HashSet;
 
-use crate::config::{ProcTmuxConfig, ProcessConfig};
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub enum ProcessStatus {
-    Running = 1,
-    Halting = 2,
-    Halted = 3,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Process {
-    pub id: usize,
-    pub label: String,
-    pub status: ProcessStatus,
-    pub pane_id: Option<String>,
-    pub pid: Option<i32>,
-    pub config: ProcessConfig,
-}
-
-impl Process {
-    pub fn new(id: usize, label: &str, config: ProcessConfig) -> Self {
-        Process {
-            id,
-            label: label.to_string(),
-            status: ProcessStatus::Halted,
-            pane_id: None,
-            pid: None,
-            config,
-        }
-    }
-
-    pub fn command(&self) -> String {
-        self.config.shell.clone().unwrap_or(
-            self.config
-                .cmd
-                .clone()
-                .unwrap_or(vec![])
-                .into_iter()
-                .map(|s| format!("'{}' ", s))
-                .collect(),
-        )
-    }
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct GUIState {
-    pub messages: Vec<String>,
-    pub filter_text: Option<String>,
-    pub entering_filter_text: bool,
-}
+use crate::config::ProcTmuxConfig;
+use crate::gui_state::GUIState;
+use crate::process::{Process, ProcessStatus};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct State {
@@ -86,6 +39,10 @@ impl State {
 
     pub fn current_process(&self) -> Option<&Process> {
         self.get_process(self.current_proc_id)
+    }
+
+    pub fn get_process_by_pid(&self, pid: i32) -> Option<&Process> {
+        self.processes.iter().find(|p| p.pid == Some(pid))
     }
 
     pub fn get_filtered_processes(&self) -> Vec<&Process> {
@@ -127,58 +84,17 @@ impl State {
 }
 
 pub trait Mutator<T> {
-    fn on(state: T) -> Self;
+    fn on(state: &T) -> Self;
     fn commit(self) -> T;
 }
 
 pub struct StateMutation {
-    init_state: State,
-}
-
-pub struct GUIStateMutation {
-    init_state: GUIState,
-}
-
-impl Mutator<GUIState> for GUIStateMutation {
-    fn on(state: GUIState) -> Self {
-        GUIStateMutation { init_state: state }
-    }
-
-    fn commit(self) -> GUIState {
-        self.init_state
-    }
-}
-
-impl GUIStateMutation {
-    pub fn set_filter_text(mut self, text: Option<String>) -> Self {
-        self.init_state.filter_text = text;
-        self
-    }
-
-    pub fn start_entering_filter(mut self) -> Self {
-        self.init_state.entering_filter_text = true;
-        self
-    }
-
-    pub fn stop_entering_filter(mut self) -> Self {
-        self.init_state.entering_filter_text = false;
-        self
-    }
-
-    pub fn add_message(mut self, message: String) -> Self {
-        self.init_state.messages.push(message);
-        self
-    }
-
-    pub fn clear_messages(mut self) -> Self {
-        self.init_state.messages.clear();
-        self
-    }
+    init_state: State
 }
 
 impl Mutator<State> for StateMutation {
-    fn on(state: State) -> Self {
-        StateMutation { init_state: state }
+    fn on(state: &State) -> Self {
+        StateMutation { init_state: state.clone() }
     }
 
     fn commit(self) -> State {

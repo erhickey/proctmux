@@ -54,13 +54,14 @@ impl TmuxDaemon {
         let mut buf_reader = BufReader::new(self.stdout.take().unwrap());
         let running = self.running.clone();
         let subscription_name = self.subscription_name.clone();
+        let session_id = self.session_id.clone();
 
         spawn(move || {
             while running.load(Ordering::Relaxed) {
                 let mut buf = String::new();
                 match buf_reader.read_line(&mut buf) {
                     Ok(_) => {
-                        if let Some(pid) = parse_pane_dead_notification(buf, &subscription_name) {
+                        if let Some(pid) = parse_pane_dead_notification(buf, &subscription_name, &session_id) {
                             sender.send(pid).unwrap();
                         }
                     },
@@ -74,7 +75,8 @@ impl TmuxDaemon {
     }
 }
 
-fn parse_pane_dead_notification(line: String, subscription_name: &str) -> Option<i32> {
+fn parse_pane_dead_notification(line: String, subscription_name: &str, session_id: &str) -> Option<i32> {
+    trace!("Control mode line (Session: {}): {}", session_id, line);
     if line.starts_with(&format!("%subscription-changed {}", subscription_name)) {
         let ss: Vec<&str> = line.split(' ').collect();
         if ss[ss.len() - 2] == "1" {

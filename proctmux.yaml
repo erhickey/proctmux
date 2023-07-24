@@ -98,6 +98,7 @@ procs:
   "vim":
     shell: "vim"
     autostart: false
+    autofocus: true
     description: 'start vim'
   "long running print":
     shell: "echo 'some text here' && sleep 3 && echo 'still running'  && sleep 3 && echo 'final text'"
