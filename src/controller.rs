@@ -147,6 +147,17 @@ impl Controller {
         self.draw_screen()
     }
 
+    pub fn on_keypress_switch_focus(&mut self) -> Result<(), Box<dyn Error>> {
+        self.switch_focus()
+    }
+
+    pub fn switch_focus(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Some(pane_id) = self.state.current_process().and_then(|p| p.clone().pane_id) {
+            tmux::select_pane(&pane_id)?;
+        }
+        Ok(())
+    }
+
     // pub fn on_process_terminated(&mut self, process_index: usize) -> Result<(), Box<dyn Error>> {
     //     self.state = StateMutation::on(self.state.clone())
     //         .mark_process_status(ProcessStatus::Halted, process_index)

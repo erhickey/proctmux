@@ -254,6 +254,7 @@ dependencies = [
  "numtoa",
  "redox_syscall",
  "redox_termios",
+ "serde",
 ]
 
 [[package]]
