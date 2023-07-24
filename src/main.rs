@@ -42,19 +42,43 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.general.kill_existing_session
     )?;
 
-    let state = State::new(&config);
-
-    let (sender, receiver) = channel();
-
     let mut tmux_daemon_attached = TmuxDaemon::new(&tmux_context.session_id)?;
-    tmux_daemon_attached.listen_for_dead_panes(sender.clone())?;
     let mut tmux_daemon_detached = TmuxDaemon::new(&tmux_context.detached_session_id)?;
-    tmux_daemon_detached.listen_for_dead_panes(sender)?;
+
+    let state = State::new(&config);
 
     let controller = Arc::new(Mutex::new(Controller::new(state, tmux_context)?));
     controller.lock().unwrap().on_startup()?;
 
+    let (sender, receiver) = channel();
     receive_dead_pids(receiver, controller.clone());
+
+    /*
+    * Creating TmuxDaemon instances (which start tmux processes in control mode) as
+    * soon as possible, and then waiting as long as we can to call the
+    * listen_for_dead_panes method on each instance (which sends the refresh-client
+    * command to the tmux control mode process of the TmuxDaemon instance),
+    * is necessary to make sure the refresh-client command succeeds on all
+    * machines/environments.
+
+    * When refresh-client is called with -B argument, tmux checks that the
+    * CLIENT_CONTROL bit is set. If it isn't the "not a control client"
+    * error appears and the subscription is not created. The CLIENT_CONTROL
+    * bit should be set when tmux is started with -C argument (control mode).
+
+    * On some machines/environments, the "not a control client" error manifests if
+    * listen_for_dead_panes is called too soon after a TmuxDaemon is instantiated.
+    * My best guess is this is a timing bug in tmux. Maybe we're calling refresh-client
+    * too soon after starting tmux, and the CLIENT_CONTROL bit hasn't been set
+    * yet. After enough time has passed (a few milliseconds? maybe not even one?) the
+    * refresh-client command will succeed, indicating the CLIENT_CONTROL bit is set.
+
+    * If a tmux bug is identified/fixed this timing should no longer be a concern,
+    * listen_for_dead_panes should be callable immediately after instantiating a TmuxDaemon.
+    */
+    tmux_daemon_attached.listen_for_dead_panes(sender.clone())?;
+    tmux_daemon_detached.listen_for_dead_panes(sender)?;
+
     input_loop(controller.clone())?;
 
     tmux_daemon_attached.kill()?;
