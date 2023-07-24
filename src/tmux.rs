@@ -150,6 +150,14 @@ pub fn get_pane_pid(pane_id: &str) -> IoResult<Output> {
         .output()
 }
 
+pub fn select_pane(pane_id: &str) -> IoResult<Output> {
+    Command::new("tmux")
+        .arg("select-pane")
+        .arg("-t")
+        .arg(pane_id)
+        .output()
+}
+
 pub fn control_mode(session_id: &str) -> IoResult<Child> {
     Command::new("tmux")
         .arg("-C")
