@@ -120,6 +120,26 @@ pub fn create_pane(pane_id: &str, command: &str) -> IoResult<Output> {
         .output()
 }
 
+pub fn create_detached_pane(
+    dest_session: &str,
+    dest_window: usize,
+    window_label: &str,
+    command: &str
+) -> IoResult<Output> {
+    Command::new("tmux")
+        .arg("new-window")
+        .arg("-d")
+        .arg("-t")
+        .arg(format!("{}:{}", dest_session, dest_window))
+        .arg("-n")
+        .arg(window_label)
+        .arg("-P")
+        .arg("-F")
+        .arg("#{pane_id}")
+        .arg(command)
+        .output()
+}
+
 pub fn get_pane_pid(pane_id: &str) -> IoResult<Output> {
     Command::new("tmux")
         .arg("display-message")

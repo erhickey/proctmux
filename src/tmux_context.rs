@@ -100,4 +100,20 @@ impl TmuxContext {
     pub fn get_pane_pid(&self, pane_id: &str) -> Result<i32, Box<dyn Error>> {
         Ok(tmux::read_bytes(tmux::get_pane_pid(pane_id))?.parse()?)
     }
+
+    pub fn create_detached_pane(
+        &self,
+        dest_window: usize,
+        window_label: &str,
+        command: &str
+    ) -> Result<String, Box<dyn Error>> {
+        let output = tmux::read_bytes(
+            tmux::create_detached_pane(&self.detached_session_id, dest_window, window_label, &command)
+        );
+        match &output {
+            Ok(pane_id) => { let _ = tmux::set_remain_on_exit(pane_id, true); },
+            Err(_) => {}
+        }
+        output
+    }
 }

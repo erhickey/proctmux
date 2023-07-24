@@ -27,9 +27,11 @@ impl Controller {
             stdout: init_screen()?,
         })
     }
+
     pub fn get_config(&self) -> &ProcTmuxConfig {
         &self.state.config
     }
+
     pub fn is_entering_filter_text(&self) -> bool {
         self.state.gui_state.entering_filter_text
     }
@@ -71,10 +73,20 @@ impl Controller {
         draw_screen(&self.stdout, &self.state)
     }
 
-    pub fn on_startup(&self) -> Result<(), Box<dyn Error>> {
-        self.draw_screen()?;
+    pub fn on_startup(&mut self) -> Result<(), Box<dyn Error>> {
         self.tmux_context.prepare()?;
-        Ok(())
+
+        let ps: Vec<usize> = self.state
+            .processes
+            .iter()
+            .filter(|p| p.config.autostart)
+            .map(|p| p.id)
+            .collect();
+        for p in ps.iter() {
+            self.start_process(*p);
+        }
+
+        self.draw_screen()
     }
 
     pub fn on_exit(&self) -> Result<(), Box<dyn Error>> {
@@ -97,21 +109,21 @@ impl Controller {
 
     pub fn on_keypress_down(&mut self) -> Result<(), Box<dyn Error>> {
         info!("on_keypress_down");
-        self.break_pane();
+        self.break_pane(self.state.current_proc_id);
         self.state = StateMutation::on(self.state.clone())
             .next_process()
             .commit();
-        self.join_pane();
+        self.join_pane(self.state.current_proc_id);
         self.draw_screen()
     }
 
     pub fn on_keypress_up(&mut self) -> Result<(), Box<dyn Error>> {
         info!("on_keypress_up");
-        self.break_pane();
+        self.break_pane(self.state.current_proc_id);
         self.state = StateMutation::on(self.state.clone())
             .previous_process()
             .commit();
-        self.join_pane();
+        self.join_pane(self.state.current_proc_id);
         self.draw_screen()
     }
 
@@ -125,13 +137,13 @@ impl Controller {
     }
 
     pub fn on_keypress_start(&mut self) -> Result<Option<i32>, Box<dyn Error>> {
-        let result = self.start_process();
+        let result = self.start_process(self.state.current_proc_id);
         self.draw_screen()?;
         Ok(result)
     }
 
     pub fn on_keypress_stop(&mut self) -> Result<(), Box<dyn Error>> {
-        self.halt_process();
+        self.halt_process(self.state.current_proc_id);
         self.draw_screen()
     }
 
@@ -173,8 +185,8 @@ impl Controller {
         Ok(())
     }
 
-    pub fn break_pane(&mut self) {
-        if let Some(process) = self.state.current_process() {
+    pub fn break_pane(&mut self, process_id: usize) {
+        if let Some(process) = self.state.get_process(process_id) {
             if let Some(pane_id) = &process.pane_id {
                 // TODO: log error?
                 let _ = self
@@ -184,8 +196,8 @@ impl Controller {
         }
     }
 
-    pub fn join_pane(&mut self) {
-        if let Some(process) = self.state.current_process() {
+    pub fn join_pane(&mut self, process_id: usize) {
+        if let Some(process) = self.state.get_process(process_id) {
             if let Some(pane_id) = &process.pane_id {
                 // TODO: log error?
                 let _ = self.tmux_context.join_pane(pane_id);
@@ -193,11 +205,11 @@ impl Controller {
         }
     }
 
-    pub fn start_process(&mut self) -> Option<i32> {
-        if self.state.current_process().is_none() {
-            return None;
-        }
-        let process = self.state.current_process().unwrap().clone();
+    pub fn start_process(&mut self, process_id: usize) -> Option<i32> {
+        let process = match self.state.get_process(process_id) {
+            Some(p) => p.clone(),
+            None => return None
+        };
 
         if process.status != ProcessStatus::Halted {
             return None;
@@ -217,7 +229,13 @@ impl Controller {
             }
         }
 
-        match self.tmux_context.create_pane(&process.command()) {
+        let new_pane = if process_id == self.state.current_proc_id {
+            self.tmux_context.create_pane(&process.command())
+        } else {
+            self.tmux_context.create_detached_pane(process.id, &process.label, &process.command())
+        };
+
+        match new_pane {
             Ok(pane_id) => {
                 let pid = self.tmux_context.get_pane_pid(&pane_id).ok();
                 info!(
@@ -235,8 +253,8 @@ impl Controller {
         }
     }
 
-    pub fn halt_process(&mut self) {
-        if let Some(process) = self.state.current_process() {
+    pub fn halt_process(&mut self, process_id: usize) {
+        if let Some(process) = self.state.get_process(process_id) {
             if process.status != ProcessStatus::Running {
                 return;
             }
