@@ -56,7 +56,6 @@ pub struct State {
     pub config: ProcTmuxConfig,
     pub current_proc_id: usize,
     pub processes: Vec<Process>,
-    pub messages: Vec<String>,
     pub gui_state: GUIState,
 }
 
@@ -70,7 +69,6 @@ impl State {
                 .enumerate()
                 .map(|(ix, (k, v))| Process::new(ix + 1, k, v.clone()))
                 .collect(),
-            messages: vec![],
             config: config.clone(),
             gui_state: GUIState {
                 messages: vec![],
