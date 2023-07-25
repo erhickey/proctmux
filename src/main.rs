@@ -1,9 +1,9 @@
 mod args;
 mod config;
 mod controller;
-mod gui_state;
 mod daemon;
 mod draw;
+mod gui_state;
 mod input;
 mod process;
 mod state;

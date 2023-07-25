@@ -13,7 +13,9 @@ pub struct GUIStateMutation {
 
 impl Mutator<GUIState> for GUIStateMutation {
     fn on(state: &GUIState) -> Self {
-        GUIStateMutation { init_state: state.clone() }
+        GUIStateMutation {
+            init_state: state.clone(),
+        }
     }
 
     fn commit(self) -> GUIState {

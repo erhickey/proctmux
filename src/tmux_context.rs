@@ -12,7 +12,10 @@ pub struct TmuxContext {
 }
 
 impl TmuxContext {
-    pub fn new(detached_session: &str, kill_existing_session: bool) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        detached_session: &str,
+        kill_existing_session: bool,
+    ) -> Result<Self, Box<dyn Error>> {
         let pane_id = match tmux::read_bytes(tmux::current_pane()) {
             Ok(val) => val,
             Err(e) => panic!("Error: Could not retrieve tmux pane id: {}", e),
@@ -28,7 +31,7 @@ impl TmuxContext {
             .collect();
 
         let detached_session_id = match {
-            if existing_session_names.contains(detached_session){
+            if existing_session_names.contains(detached_session) {
                 if kill_existing_session {
                     info!("Killing existing session: {}", detached_session);
                     tmux::kill_session(detached_session)?;
@@ -41,14 +44,12 @@ impl TmuxContext {
             }
         } {
             Ok(val) => val,
-            Err(e) => panic!("Error: Could not retrieve tmux detached session id: {}", e)
+            Err(e) => panic!("Error: Could not retrieve tmux detached session id: {}", e),
         };
 
         info!(
             "creating tmux context: pane_id: {}, session: {}, detached_session: {}",
-            pane_id,
-            session_id,
-            detached_session_id,
+            pane_id, session_id, detached_session_id,
         );
 
         Ok(TmuxContext {
@@ -80,7 +81,12 @@ impl TmuxContext {
             dest_window,
             window_label
         );
-        let output = tmux::break_pane(pane_id, &self.detached_session_id, dest_window, window_label);
+        let output = tmux::break_pane(
+            pane_id,
+            &self.detached_session_id,
+            dest_window,
+            window_label,
+        );
         tmux::set_remain_on_exit(pane_id, true)?;
         output
     }
@@ -103,14 +109,19 @@ impl TmuxContext {
         &self,
         dest_window: usize,
         window_label: &str,
-        command: &str
+        command: &str,
     ) -> Result<String, Box<dyn Error>> {
         trace!("Creating detached pane: {}", window_label);
-        let output = tmux::read_bytes(
-            tmux::create_detached_pane(&self.detached_session_id, dest_window, window_label, &command)
-        );
+        let output = tmux::read_bytes(tmux::create_detached_pane(
+            &self.detached_session_id,
+            dest_window,
+            window_label,
+            &command,
+        ));
         match &output {
-            Ok(pane_id) => { let _ = tmux::set_remain_on_exit(pane_id, true); },
+            Ok(pane_id) => {
+                let _ = tmux::set_remain_on_exit(pane_id, true);
+            }
             Err(_) => {}
         }
         output
