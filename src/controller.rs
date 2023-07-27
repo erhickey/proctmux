@@ -262,9 +262,9 @@ fn start_process(
     }
 
     let new_pane = if process.id == state.current_proc_id {
-        tmux_context.create_pane(&process.command())
+        tmux_context.create_pane(process)
     } else {
-        tmux_context.create_detached_pane(process.id, &process.label, &process.command())
+        tmux_context.create_detached_pane(process)
     };
 
     match new_pane {
