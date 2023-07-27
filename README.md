@@ -14,6 +14,5 @@ List of features requiring development to bring proctmux near parity with procmu
 - Display:
     - sort process list
 - Processes:
-    - working directory
     - interrupt/kill
     - interpolation

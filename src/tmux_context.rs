@@ -102,6 +102,7 @@ impl TmuxContext {
         tmux::read_bytes(tmux::create_pane(
             &self.pane_id,
             &process.command(),
+            &process.config.cwd,
             &process.config.env,
         ))
     }
@@ -117,6 +118,7 @@ impl TmuxContext {
             process.id,
             &process.label,
             &process.command(),
+            &process.config.cwd,
             &process.config.env,
         ));
         match &output {
