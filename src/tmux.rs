@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::io::Result as IoResult;
-use std::process::{Child, Command, Stdio, Output};
+use std::process::{Child, Command, Output, Stdio};
 
 fn clean_output(s: &str) -> String {
     s.replace("\n", "")
@@ -68,7 +68,7 @@ pub fn break_pane(
     pane_id: &str,
     dest_session: &str,
     dest_window: usize,
-    window_label: &str
+    window_label: &str,
 ) -> IoResult<Output> {
     Command::new("tmux")
         .arg("break-pane")
@@ -124,7 +124,7 @@ pub fn create_detached_pane(
     dest_session: &str,
     dest_window: usize,
     window_label: &str,
-    command: &str
+    command: &str,
 ) -> IoResult<Output> {
     Command::new("tmux")
         .arg("new-window")

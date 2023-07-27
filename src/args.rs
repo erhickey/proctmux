@@ -2,7 +2,7 @@ use std::{env, error::Error, fs};
 
 use crate::config::ProcTmuxConfig;
 
-pub fn parse_config_from_args()-> Result<ProcTmuxConfig, Box<dyn Error>>  {
+pub fn parse_config_from_args() -> Result<ProcTmuxConfig, Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let mut config_file = "proctmux.yaml".to_string();
     if args.len() >= 2 {

@@ -5,7 +5,8 @@ use termion::color::{self, Bg, Color, Fg};
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::{clear, cursor, style, terminal_size};
 
-use crate::model::{Process, ProcessStatus, State};
+use crate::process::{Process, ProcessStatus};
+use crate::state::State;
 
 const UP: char = '▲';
 const DOWN: char = '▼';
@@ -161,7 +162,10 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
     if !state.config.layout.hide_help {
         if let Some(current_proc) = current_proc {
             let desc = &current_proc.config.description;
-            all_msgs.push((Box::new(color::White) as Box<dyn Color>, desc.clone().unwrap_or("".to_string())));
+            all_msgs.push((
+                Box::new(color::White) as Box<dyn Color>,
+                desc.clone().unwrap_or("".to_string()),
+            ));
         }
     }
     // add error messages

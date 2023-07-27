@@ -1,281 +1,382 @@
 use std::error::Error;
 use std::io::Stdout;
+use std::sync::Mutex;
 
-use log::info;
 use termion::raw::RawTerminal;
 
-use crate::config::ProcTmuxConfig;
 use crate::draw::{draw_screen, init_screen, prepare_screen_for_exit};
-use crate::model::{GUIStateMutation, Mutator, ProcessStatus, State, StateMutation};
+use crate::gui_state::GUIStateMutation;
+use crate::process::{Process, ProcessStatus};
+use crate::state::{Mutator, State, StateMutation};
 use crate::tmux;
 use crate::tmux_context::TmuxContext;
 
 pub struct Controller {
-    state: State,
+    state: Mutex<State>,
     tmux_context: TmuxContext,
     stdout: RawTerminal<Stdout>,
 }
 
 impl Controller {
-    pub fn new(
-        state: State,
-        tmux_context: TmuxContext,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(state: State, tmux_context: TmuxContext) -> Result<Self, Box<dyn Error>> {
         Ok(Controller {
-            state,
+            state: Mutex::new(state),
             tmux_context,
             stdout: init_screen()?,
         })
     }
 
-    pub fn get_config(&self) -> &ProcTmuxConfig {
-        &self.state.config
+    /*
+     * All modifications to the state mutex value can/should be
+     * easily done through this method
+     */
+    fn lock_and_load<F>(&self, f: F) -> Result<(), Box<dyn Error>>
+    where
+        F: Fn(&State) -> Result<Option<State>, Box<dyn Error>>,
+    {
+        match self.state.lock() {
+            Ok(mut state) => match f(&state) {
+                Ok(Some(new_state)) => {
+                    *state = new_state;
+                    self.draw_screen(&state)
+                }
+                Ok(None) => Ok(()),
+                Err(e) => {
+                    return Err(e);
+                }
+            },
+            Err(e) => {
+                error!("lock_and_load => Failed to lock state: {}", e);
+                Ok(())
+            }
+        }
     }
 
     pub fn is_entering_filter_text(&self) -> bool {
-        self.state.gui_state.entering_filter_text
+        self.state
+            .lock()
+            .map(|s| s.gui_state.entering_filter_text)
+            .unwrap_or(false)
     }
 
-    pub fn get_filter_text(&self) -> Option<String> {
-        self.state.gui_state.filter_text.clone()
+    pub fn filter_text(&self) -> Option<String> {
+        self.state
+            .lock()
+            .map(|s| s.gui_state.filter_text.clone())
+            .unwrap_or(None)
     }
 
-    pub fn on_filter_start(&mut self) -> Result<(), Box<dyn Error>> {
-        let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
-            .start_entering_filter()
-            .commit();
-        self.state = StateMutation::on(self.state.clone())
-            .set_gui_state(gui_state)
-            .commit();
-        self.draw_screen()
-    }
-    pub fn on_filter_done(&mut self) -> Result<(), Box<dyn Error>> {
-        let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
-            .stop_entering_filter()
-            .commit();
-        self.state = StateMutation::on(self.state.clone())
-            .set_gui_state(gui_state)
-            .commit();
-        self.draw_screen()
+    pub fn on_filter_start(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_filter_start");
+        self.lock_and_load(|state| {
+            let gui_state = GUIStateMutation::on(&state.gui_state)
+                .start_entering_filter()
+                .commit();
+            Ok(Some(
+                StateMutation::on(state).set_gui_state(gui_state).commit(),
+            ))
+        })
     }
 
-    pub fn on_filter_set(&mut self, new_filter_text: Option<String>) -> Result<(), Box<dyn Error>> {
-        let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
-            .set_filter_text(new_filter_text)
-            .commit();
-        self.state = StateMutation::on(self.state.clone())
-            .set_gui_state(gui_state)
-            .commit();
-        self.draw_screen()
+    pub fn on_filter_done(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_filter_done");
+        self.lock_and_load(|state| {
+            let gui_state = GUIStateMutation::on(&state.gui_state)
+                .stop_entering_filter()
+                .commit();
+            Ok(Some(
+                StateMutation::on(state).set_gui_state(gui_state).commit(),
+            ))
+        })
     }
 
-    fn draw_screen(&self) -> Result<(), Box<dyn Error>> {
-        draw_screen(&self.stdout, &self.state)
+    pub fn on_filter_set(&self, new_filter_text: Option<String>) -> Result<(), Box<dyn Error>> {
+        trace!("on_filter_set");
+        self.lock_and_load(move |state| {
+            let gui_state = GUIStateMutation::on(&state.gui_state)
+                .set_filter_text(new_filter_text.clone())
+                .commit();
+            Ok(Some(
+                StateMutation::on(state).set_gui_state(gui_state).commit(),
+            ))
+        })
     }
 
-    pub fn on_startup(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn on_error(&self, err: Box<dyn Error>) -> Result<(), Box<dyn Error>> {
+        trace!("on_error");
+        self.lock_and_load(|state| {
+            let gui_state = GUIStateMutation::on(&state.gui_state)
+                .add_message(format!("{}", err))
+                .commit();
+            Ok(Some(
+                StateMutation::on(state).set_gui_state(gui_state).commit(),
+            ))
+        })
+    }
+
+    fn draw_screen(&self, state: &State) -> Result<(), Box<dyn Error>> {
+        draw_screen(&self.stdout, state)
+    }
+
+    pub fn on_startup(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_startup");
         self.tmux_context.prepare()?;
 
-        let ps: Vec<usize> = self.state
-            .processes
-            .iter()
-            .filter(|p| p.config.autostart)
-            .map(|p| p.id)
-            .collect();
-        for p in ps.iter() {
-            self.start_process(*p);
-        }
-
-        self.draw_screen()
+        self.lock_and_load(|state| {
+            let mut new_state = state.clone();
+            for process in &state.processes {
+                if process.config.autostart {
+                    match start_process(&new_state, &self.tmux_context, &process) {
+                        Ok(Some(s)) => new_state = s,
+                        Ok(None) => {}
+                        Err(e) => error!("Error auto-starting process {}: {}", process.label, e),
+                    }
+                }
+            }
+            Ok(Some(new_state))
+        })
     }
 
     pub fn on_exit(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_exit");
         self.tmux_context.cleanup()?;
         prepare_screen_for_exit(&self.stdout)
     }
 
     pub fn on_keypress_quit(&self) -> Result<(), Box<dyn Error>> {
-        self.state
-            .processes
-            .iter()
-            .filter(|process| process.status == ProcessStatus::Halted)
-            .for_each(|process| {
-                if let Some(pane_id) = &process.pane_id {
-                    let _ = tmux::kill_pane(pane_id);
+        trace!("on_keypress_quit");
+        self.lock_and_load(|state| {
+            state
+                .processes
+                .iter()
+                .filter(|process| process.status == ProcessStatus::Halted)
+                .for_each(|process| {
+                    if let Some(pane_id) = &process.pane_id {
+                        let _ = tmux::kill_pane(pane_id);
+                    }
+                });
+            // quitting, no need to track state changes
+            Ok(None)
+        })
+    }
+
+    pub fn on_keypress_down(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_keypress_down");
+        self.lock_and_load(|state| {
+            break_pane(state, &self.tmux_context, state.current_proc_id)?;
+            let new_state = StateMutation::on(state).next_process().commit();
+            match join_pane(&new_state, &self.tmux_context, new_state.current_proc_id) {
+                Ok(_) => Ok(Some(new_state)),
+                Err(e) => {
+                    error!(
+                        "Error joining pane (proc id: {}): {}",
+                        new_state.current_proc_id, e
+                    );
+                    Ok(Some(new_state))
                 }
-            });
-        Ok(())
-    }
-
-    pub fn on_keypress_down(&mut self) -> Result<(), Box<dyn Error>> {
-        info!("on_keypress_down");
-        self.break_pane(self.state.current_proc_id);
-        self.state = StateMutation::on(self.state.clone())
-            .next_process()
-            .commit();
-        self.join_pane(self.state.current_proc_id);
-        self.draw_screen()
-    }
-
-    pub fn on_keypress_up(&mut self) -> Result<(), Box<dyn Error>> {
-        info!("on_keypress_up");
-        self.break_pane(self.state.current_proc_id);
-        self.state = StateMutation::on(self.state.clone())
-            .previous_process()
-            .commit();
-        self.join_pane(self.state.current_proc_id);
-        self.draw_screen()
-    }
-
-    pub fn on_error(&mut self, err: Box<dyn Error>) {
-        let gui_state = GUIStateMutation::on(self.state.gui_state.clone())
-            .add_message(format!("{}", err))
-            .commit();
-        self.state = StateMutation::on(self.state.clone())
-            .set_gui_state(gui_state)
-            .commit();
-    }
-
-    pub fn on_keypress_start(&mut self) -> Result<Option<i32>, Box<dyn Error>> {
-        let result = self.start_process(self.state.current_proc_id);
-        self.draw_screen()?;
-        Ok(result)
-    }
-
-    pub fn on_keypress_stop(&mut self) -> Result<(), Box<dyn Error>> {
-        self.halt_process(self.state.current_proc_id);
-        self.draw_screen()
-    }
-
-    pub fn on_keypress_switch_focus(&mut self) -> Result<(), Box<dyn Error>> {
-        self.switch_focus()
-    }
-
-    pub fn switch_focus(&mut self) -> Result<(), Box<dyn Error>> {
-        if let Some(pane_id) = self.state.current_process().and_then(|p| p.clone().pane_id) {
-            tmux::select_pane(&pane_id)?;
-        }
-        Ok(())
-    }
-
-    // pub fn on_process_terminated(&mut self, process_index: usize) -> Result<(), Box<dyn Error>> {
-    //     self.state = StateMutation::on(self.state.clone())
-    //         .mark_process_status(ProcessStatus::Halted, process_index)
-    //         .mark_pane_status(PaneStatus::Dead, process_index)
-    //         .commit();
-    //     self.draw_screen()
-    // }
-
-    // pub fn get_processes_to_pid(&self) -> HashMap<usize, Option<i32>> {
-    //     let m: HashMap<_,_>= self.state.processes.iter().map(|process| {
-    //         if process.status == ProcessStatus::Halted {
-    //             return (process.id, None)
-    //         }
-    //         if let Some(addy) = &process.tmux_address {
-    //             if let Some(pane_id) = addy.pane_id {
-    //                 if let Ok(pid) = self.tmux_context.get_pane_pid(pane_id) {
-    //                     return (process.id, Some(pid))
-    //                 }
-    //             }
-    //         }
-    //         (process.id, None)
-    //     }).collect();
-    //     info!("get_processes_to_pid: {:?}", m);
-    //     m
-    // }
-
-    pub fn on_pid_terminated(&mut self, pid: i32) -> Result<(), Box<dyn Error>> {
-        info!("on_pid_terminated: {}", pid);
-        if let Some(process) = self.state.processes.iter().find(|p| p.pid == Some(pid)) {
-            self.state = StateMutation::on(self.state.clone())
-                .set_process_status(ProcessStatus::Halted, process.id)
-                .set_process_pid(None, process.id)
-                .commit();
-            self.draw_screen()?;
-        }
-        Ok(())
-    }
-
-    pub fn break_pane(&mut self, process_id: usize) {
-        if let Some(process) = self.state.get_process(process_id) {
-            if let Some(pane_id) = &process.pane_id {
-                // TODO: log error?
-                let _ = self
-                    .tmux_context
-                    .break_pane(pane_id, process.id, &process.label);
             }
-        }
+        })
     }
 
-    pub fn join_pane(&mut self, process_id: usize) {
-        if let Some(process) = self.state.get_process(process_id) {
-            if let Some(pane_id) = &process.pane_id {
-                // TODO: log error?
-                let _ = self.tmux_context.join_pane(pane_id);
-            }
-        }
-    }
-
-    pub fn start_process(&mut self, process_id: usize) -> Option<i32> {
-        let process = match self.state.get_process(process_id) {
-            Some(p) => p.clone(),
-            None => return None
-        };
-
-        if process.status != ProcessStatus::Halted {
-            return None;
-        }
-
-        let mut state_mutation = StateMutation::on(self.state.clone())
-            .set_process_status(ProcessStatus::Running, process.id);
-
-        if let Some(pane_id) = &process.pane_id {
-            match tmux::kill_pane(pane_id) {
-                Ok(_) => {
-                    let sm =
-                        StateMutation::on(self.state.clone()).set_process_pane_id(None, process.id);
-                    self.state = sm.commit();
+    pub fn on_keypress_up(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_keypress_up");
+        self.lock_and_load(|state| {
+            break_pane(state, &self.tmux_context, state.current_proc_id)?;
+            let new_state = StateMutation::on(state).previous_process().commit();
+            match join_pane(&new_state, &self.tmux_context, new_state.current_proc_id) {
+                Ok(_) => Ok(Some(new_state)),
+                Err(e) => {
+                    error!(
+                        "Error joining pane (proc id: {}): {}",
+                        new_state.current_proc_id, e
+                    );
+                    Ok(Some(new_state))
                 }
-                Err(_) => {} // TODO: log error?
             }
-        }
+        })
+    }
 
-        let new_pane = if process_id == self.state.current_proc_id {
-            self.tmux_context.create_pane(&process.command())
-        } else {
-            self.tmux_context.create_detached_pane(process.id, &process.label, &process.command())
-        };
+    pub fn on_keypress_start(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_keypress_start");
+        self.lock_and_load(|state| match state.current_process() {
+            Some(process) => {
+                let kill_pane_state = kill_pane(state, process)?.unwrap_or(state.clone());
 
-        match new_pane {
-            Ok(pane_id) => {
-                let pid = self.tmux_context.get_pane_pid(&pane_id).ok();
-                info!(
-                    "Started {} process, pid: {}",
-                    process.label,
-                    pid.unwrap_or(-1)
-                );
-                state_mutation = state_mutation
+                match start_process(&kill_pane_state, &self.tmux_context, process) {
+                    Ok(Some(sp_state)) => {
+                        if process.config.autofocus {
+                            trace!("Auto-focusing {}", process.label);
+                            if let Some(e) = focus_active_pane(&sp_state).err() {
+                                error!("Error auto-focusing {}: {}", process.label, e);
+                            }
+                        }
+                        Ok(Some(sp_state))
+                    }
+                    Ok(None) => Ok(Some(kill_pane_state)),
+                    Err(e) => {
+                        error!("Error starting process {}: {}", process.label, e);
+                        Ok(Some(kill_pane_state))
+                    }
+                }
+            }
+            None => Ok(None),
+        })
+    }
+
+    pub fn on_keypress_stop(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_keypress_stop");
+        self.lock_and_load(|state| halt_process(state, state.current_process()))
+    }
+
+    pub fn on_keypress_switch_focus(&self) -> Result<(), Box<dyn Error>> {
+        trace!("on_keypress_switch_focus");
+        self.lock_and_load(|state| focus_active_pane(state))
+    }
+
+    pub fn on_pid_terminated(&self, pid: i32) -> Result<(), Box<dyn Error>> {
+        trace!("on_pid_terminated: {}", pid);
+        self.lock_and_load(|state| {
+            let process = state.get_process_by_pid(pid);
+            let new_state = set_process_terminated(state, process);
+            if new_state.is_some() {
+                info!("pid terminated: {}", pid);
+                if let Some(e) = tmux::select_pane(&self.tmux_context.pane_id).err() {
+                    error!(
+                        "Error focusing proctmux pane after pid {} termination: {}",
+                        pid, e
+                    );
+                }
+            }
+            Ok(new_state.or(Some(state.clone())))
+        })
+    }
+}
+
+fn start_process(
+    state: &State,
+    tmux_context: &TmuxContext,
+    process: &Process,
+) -> Result<Option<State>, Box<dyn Error>> {
+    if process.status != ProcessStatus::Halted {
+        return Ok(None);
+    }
+
+    let new_pane = if process.id == state.current_proc_id {
+        tmux_context.create_pane(&process.command())
+    } else {
+        tmux_context.create_detached_pane(process.id, &process.label, &process.command())
+    };
+
+    match new_pane {
+        Ok(pane_id) => {
+            let pid = tmux_context.get_pane_pid(&pane_id).ok();
+            info!(
+                "Started {} process, pid: {}",
+                process.label,
+                pid.unwrap_or(-1)
+            );
+            Ok(Some(
+                StateMutation::on(state)
+                    .set_process_status(ProcessStatus::Running, process.id)
                     .set_process_pane_id(Some(pane_id), process.id)
-                    .set_process_pid(pid, process.id);
-                self.state = state_mutation.commit();
-                pid
-            }
-            Err(_) => None, // TODO: handle this, maybe just log it?
+                    .set_process_pid(pid, process.id)
+                    .commit(),
+            ))
         }
+        Err(e) => Err(e),
+    }
+}
+
+fn kill_pane(state: &State, process: &Process) -> Result<Option<State>, Box<dyn Error>> {
+    if process.status != ProcessStatus::Halted {
+        return Ok(None);
     }
 
-    pub fn halt_process(&mut self, process_id: usize) {
-        if let Some(process) = self.state.get_process(process_id) {
-            if process.status != ProcessStatus::Running {
-                return;
-            }
-
-            if let Some(pid) = process.pid {
-                unsafe { libc::kill(pid, libc::SIGKILL) };
-                self.state = StateMutation::on(self.state.clone())
-                    .set_process_status(ProcessStatus::Halting, process.id)
-                    .commit();
+    match &process.pane_id {
+        Some(pane_id) => {
+            // TODO: will this error if pane id value exists but pane does not?
+            match tmux::kill_pane(pane_id) {
+                Ok(_) => Ok(Some(
+                    StateMutation::on(state)
+                        .set_process_pane_id(None, process.id)
+                        .commit(),
+                )),
+                Err(e) => return Err(Box::new(e)),
             }
         }
+        None => Ok(None),
     }
+}
+
+fn focus_active_pane(state: &State) -> Result<Option<State>, Box<dyn Error>> {
+    match state.current_process().and_then(|p| p.pane_id.clone()) {
+        Some(pane_id) => Ok(tmux::select_pane(&pane_id).map(|_| None)?),
+        None => Ok(None),
+    }
+}
+
+fn set_process_terminated(state: &State, process: Option<&Process>) -> Option<State> {
+    process
+        .map(|p| {
+            if p.status != ProcessStatus::Halted {
+                Some(
+                    StateMutation::on(state)
+                        .set_process_status(ProcessStatus::Halted, p.id)
+                        .set_process_pid(None, p.id)
+                        .commit(),
+                )
+            } else {
+                None
+            }
+        })
+        .flatten()
+}
+
+fn halt_process(state: &State, process: Option<&Process>) -> Result<Option<State>, Box<dyn Error>> {
+    match process {
+        Some(p) => {
+            if p.status != ProcessStatus::Running {
+                return Ok(None);
+            }
+
+            match p.pid {
+                Some(pid) => {
+                    unsafe { libc::kill(pid, libc::SIGKILL) };
+                    Ok(Some(
+                        StateMutation::on(state)
+                            .set_process_status(ProcessStatus::Halting, p.id)
+                            .commit(),
+                    ))
+                }
+                None => Ok(None),
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+fn break_pane(
+    state: &State,
+    tmux_context: &TmuxContext,
+    process_id: usize,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(process) = state.get_process(process_id) {
+        if let Some(pane_id) = &process.pane_id {
+            tmux_context.break_pane(pane_id, process.id, &process.label)?;
+        }
+    }
+    Ok(())
+}
+
+fn join_pane(
+    state: &State,
+    tmux_context: &TmuxContext,
+    process_id: usize,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(process) = state.get_process(process_id) {
+        if let Some(pane_id) = &process.pane_id {
+            tmux_context.join_pane(pane_id)?;
+        }
+    }
+    Ok(())
 }
