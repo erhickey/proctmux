@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, mpsc::Receiver};
+use std::sync::{mpsc::Receiver, Arc, Mutex};
 use std::thread::spawn;
 
 use crate::controller::Controller;

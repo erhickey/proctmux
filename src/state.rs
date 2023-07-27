@@ -32,9 +32,7 @@ impl State {
     }
 
     pub fn get_process(&self, process_id: usize) -> Option<&Process> {
-        self.processes
-            .iter()
-            .find(|proc| proc.id == process_id)
+        self.processes.iter().find(|proc| proc.id == process_id)
     }
 
     pub fn current_process(&self) -> Option<&Process> {
@@ -89,12 +87,14 @@ pub trait Mutator<T> {
 }
 
 pub struct StateMutation {
-    init_state: State
+    init_state: State,
 }
 
 impl Mutator<State> for StateMutation {
     fn on(state: &State) -> Self {
-        StateMutation { init_state: state.clone() }
+        StateMutation {
+            init_state: state.clone(),
+        }
     }
 
     fn commit(self) -> State {

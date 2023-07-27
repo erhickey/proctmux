@@ -1,9 +1,9 @@
 use std::error::Error;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, ExitStatus};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::thread::spawn;
 
 use crate::tmux;
@@ -19,7 +19,10 @@ pub struct TmuxDaemon {
 
 impl TmuxDaemon {
     pub fn new(session_id: &str) -> Result<Self, Box<dyn Error>> {
-        info!("Starting tmux control mode (Session {}) process", session_id);
+        info!(
+            "Starting tmux control mode (Session {}) process",
+            session_id
+        );
         let mut process = tmux::control_mode(session_id)?;
         let stdin = process.stdin.take().unwrap();
         let stdout = process.stdout.take();
@@ -35,7 +38,10 @@ impl TmuxDaemon {
     }
 
     fn subscribe_to_pane_dead_notifications(&mut self) -> std::io::Result<()> {
-        info!("Starting subscription (Session: {}): {}", self.session_id, self.subscription_name);
+        info!(
+            "Starting subscription (Session: {}): {}",
+            self.session_id, self.subscription_name
+        );
         let cmd = format!(
             "refresh-client -B {}:%*:\"#{{pane_dead}} #{{pane_pid}}\"\n",
             self.subscription_name
@@ -44,10 +50,13 @@ impl TmuxDaemon {
     }
 
     pub fn kill(&mut self) -> std::io::Result<ExitStatus> {
-        info!("Killing tmux control mode (Session: {}) process", self.session_id);
+        info!(
+            "Killing tmux control mode (Session: {}) process",
+            self.session_id
+        );
         self.running.store(false, Ordering::Relaxed);
         self.process.kill()?;
-        self.process.wait()  // make sure stdin is closed
+        self.process.wait() // make sure stdin is closed
     }
 
     pub fn listen_for_dead_panes(&mut self, sender: Sender<i32>) -> Result<(), Box<dyn Error>> {
@@ -61,11 +70,13 @@ impl TmuxDaemon {
                 let mut buf = String::new();
                 match buf_reader.read_line(&mut buf) {
                     Ok(_) => {
-                        if let Some(pid) = parse_pane_dead_notification(buf, &subscription_name, &session_id) {
+                        if let Some(pid) =
+                            parse_pane_dead_notification(buf, &subscription_name, &session_id)
+                        {
                             sender.send(pid).unwrap();
                         }
-                    },
-                    _ => return
+                    }
+                    _ => return,
                 }
             }
         });
@@ -75,7 +86,11 @@ impl TmuxDaemon {
     }
 }
 
-fn parse_pane_dead_notification(line: String, subscription_name: &str, session_id: &str) -> Option<i32> {
+fn parse_pane_dead_notification(
+    line: String,
+    subscription_name: &str,
+    session_id: &str,
+) -> Option<i32> {
     trace!("Control mode line (Session: {}): {}", session_id, line);
     if line.starts_with(&format!("%subscription-changed {}", subscription_name)) {
         let ss: Vec<&str> = line.split(' ').collect();
