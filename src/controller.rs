@@ -341,7 +341,11 @@ fn halt_process(state: &State, process: Option<&Process>) -> Result<Option<State
 
             match p.pid {
                 Some(pid) => {
-                    unsafe { libc::kill(pid, libc::SIGKILL) };
+                    info!(
+                        "Sending signal {} to pid {} ({})",
+                        p.config.stop, pid, p.label
+                    );
+                    unsafe { libc::kill(pid, p.config.stop) };
                     Ok(Some(
                         StateMutation::on(state)
                             .set_process_status(ProcessStatus::Halting, p.id)
