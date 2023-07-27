@@ -123,6 +123,7 @@ fn add_env_variables<'a>(
 pub fn create_pane(
     pane_id: &str,
     command: &str,
+    working_directory: &str,
     env: &Option<HashMap<String, Option<String>>>,
 ) -> IoResult<Output> {
     let mut c = Command::new("tmux");
@@ -134,6 +135,8 @@ pub fn create_pane(
             .arg("70%")
             .arg("-t")
             .arg(pane_id)
+            .arg("-c")
+            .arg(working_directory)
             .arg("-P")
             .arg("-F")
             .arg("#{pane_id}"),
@@ -148,6 +151,7 @@ pub fn create_detached_pane(
     dest_window: usize,
     window_label: &str,
     command: &str,
+    working_directory: &str,
     env: &Option<HashMap<String, Option<String>>>,
 ) -> IoResult<Output> {
     let mut c = Command::new("tmux");
@@ -158,6 +162,8 @@ pub fn create_detached_pane(
             .arg(format!("{}:{}", dest_session, dest_window))
             .arg("-n")
             .arg(window_label)
+            .arg("-c")
+            .arg(working_directory)
             .arg("-P")
             .arg("-F")
             .arg("#{pane_id}"),
