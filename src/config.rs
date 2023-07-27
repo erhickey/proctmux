@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, path::PathBuf};
+use std::{collections::HashMap, env, ffi::c_int, path::PathBuf};
 
 use serde::{Deserialize, Deserializer, Serialize};
 use termion::event::Key;
@@ -48,8 +48,8 @@ pub struct ProcTmuxConfig {
     pub style: StyleConfig,
 }
 
-fn default_kill_signal() -> String {
-    "SIGKILL".to_string()
+fn default_kill_signal() -> c_int {
+    libc::SIGKILL
 }
 fn current_working_dir() -> String {
     get_current_working_dir()
@@ -87,6 +87,18 @@ fn default_filter_submit_keybinding() -> Vec<Key> {
 }
 fn default_switch_focus_submit_keybinding() -> Vec<Key> {
     vec![Key::Ctrl('w')]
+}
+fn deserialize_kill_signal<'de, D>(deserializer: D) -> Result<c_int, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let signal: String = Deserialize::deserialize(deserializer)?;
+    match signal.as_str() {
+        "SIGKILL" => Ok(libc::SIGKILL),
+        "SIGINT" => Ok(libc::SIGINT),
+        "SIGTERM" => Ok(libc::SIGTERM),
+        _ => panic!("Could not deserialize kill signal: {}", signal),
+    }
 }
 fn deserialize_keybinding_notation<'de, D>(deserializer: D) -> Result<Vec<Key>, D::Error>
 where
@@ -216,8 +228,11 @@ pub struct ProcessConfig {
     pub cmd: Option<Vec<String>>,
     #[serde(default = "current_working_dir")]
     pub cwd: String,
-    #[serde(default = "default_kill_signal")]
-    pub stop: String,
+    #[serde(
+        default = "default_kill_signal",
+        deserialize_with = "deserialize_kill_signal"
+    )]
+    pub stop: c_int,
     pub env: Option<HashMap<String, Option<String>>>,
     pub add_path: Option<Vec<String>>,
     pub description: Option<String>,
