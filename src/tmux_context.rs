@@ -3,6 +3,7 @@ use std::error::Error;
 use std::io::Result as IoResult;
 use std::process::Output;
 
+use crate::process::Process;
 use crate::tmux;
 
 pub struct TmuxContext {
@@ -96,27 +97,27 @@ impl TmuxContext {
         tmux::join_pane(pane_id, &self.pane_id)
     }
 
-    pub fn create_pane(&self, command: &str) -> Result<String, Box<dyn Error>> {
-        trace!("Creating pane: {}", command);
-        tmux::read_bytes(tmux::create_pane(&self.pane_id, command))
+    pub fn create_pane(&self, process: &Process) -> Result<String, Box<dyn Error>> {
+        trace!("Creating pane: {}", process.label);
+        tmux::read_bytes(tmux::create_pane(
+            &self.pane_id,
+            &process.command(),
+            &process.config.env,
+        ))
     }
 
     pub fn get_pane_pid(&self, pane_id: &str) -> Result<i32, Box<dyn Error>> {
         Ok(tmux::read_bytes(tmux::get_pane_pid(pane_id))?.parse()?)
     }
 
-    pub fn create_detached_pane(
-        &self,
-        dest_window: usize,
-        window_label: &str,
-        command: &str,
-    ) -> Result<String, Box<dyn Error>> {
-        trace!("Creating detached pane: {}", window_label);
+    pub fn create_detached_pane(&self, process: &Process) -> Result<String, Box<dyn Error>> {
+        trace!("Creating detached pane: {}", process.label);
         let output = tmux::read_bytes(tmux::create_detached_pane(
             &self.detached_session_id,
-            dest_window,
-            window_label,
-            &command,
+            process.id,
+            &process.label,
+            &process.command(),
+            &process.config.env,
         ));
         match &output {
             Ok(pane_id) => {
