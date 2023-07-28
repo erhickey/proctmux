@@ -32,7 +32,8 @@ fn default_style() -> StyleConfig {
         unselected_process_color: default_unselected_process_color(), 
         status_running_color: default_status_running_color(), 
         status_stopped_color: default_status_stopped_color(),
-        status_halting_color: default_status_halting_color()
+        status_halting_color: default_status_halting_color(),
+        pointer_char: default_pointer_char(),
     }
 }
 
@@ -132,32 +133,6 @@ where
 }
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
 pub struct KeybindingConfig {
-    // quit: List[str] = field(default_factory=lambda: ['q'])
-    // filter: List[str] = field(default_factory=lambda: ['/'])
-    // submit_filter: List[str] = field(default_factory=lambda: ['enter'])
-    // next_input: List[str] = field(default_factory=lambda: ['tab', 'down'])
-    // previous_input: List[str] = field(default_factory=lambda: ['s-tab', 'up'])
-    // submit_dialog: List[str] = field(default_factory=lambda: ['enter'])
-    // cancel_dialog: List[str] = field(default_factory=lambda: ['escape'])
-    // start: List[str] = field(default_factory=lambda: ['s'])
-    // stop: List[str] = field(default_factory=lambda: ['x'])
-    // up: List[str] = field(default_factory=lambda: ['up', 'k'])
-    // down: List[str] = field(default_factory=lambda: ['down', 'j'])
-    // switch_focus: List[str] = field(default_factory=lambda: ['c-w'])
-    // zoom: List[str] = field(default_factory=lambda: ['c-z'])
-    // docs: List[str] = field(default_factory=lambda: ['?'])
-    // toggle_scroll: List[str] = field(default_factory=lambda: ['c-s'])
-    // #[serde(default = "default_quit_keybinding")]
-    // quit: Vec<String>,
-    // filter: Option<Vec<String>>,
-    // submit_filter: Option<Vec<String>>,
-    // next_input: Option<Vec<String>>,
-    // previous_input: Option<Vec<String>>,
-    // submit_dialog: Option<Vec<String>>,
-    // cancel_dialog: Option<Vec<String>>,
-    // switch_focus: Option<Vec<String>>,
-    // zoom: Option<Vec<String>>,
-    // docs: Option<Vec<String>>,
 
     #[serde(default = "default_quit_keybinding", deserialize_with = "deserialize_keybinding_notation")]
     pub quit: Vec<Key>,
@@ -275,6 +250,9 @@ fn default_status_stopped_color() -> String {
 fn default_status_halting_color() -> String {
     "ansiyellow".to_string()
 }
+fn default_pointer_char() -> String {
+    "▶".to_string()
+}
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq )]
 pub struct StyleConfig {
@@ -292,6 +270,9 @@ pub struct StyleConfig {
 
     #[serde(default = "default_status_halting_color")]
     pub status_halting_color: String,
+
+    #[serde(default = "default_pointer_char")]
+    pub pointer_char: String,
 
 }
 
