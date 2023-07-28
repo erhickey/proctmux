@@ -95,7 +95,7 @@ fn key_to_str(key: &Key) -> String {
     match key {
         Key::Char(c) => format!("{}", to_printable_char(c)),
         Key::Alt(c) => format!("⎇-{}", to_printable_char(c)),
-        Key::Ctrl(c) =>  format!("^-{}", to_printable_char(c)),
+        Key::Ctrl(c) => format!("^-{}", to_printable_char(c)),
         Key::Left => "←".to_string(),
         Key::Right => "→".to_string(),
         Key::Up => "↑".to_string(),
@@ -212,12 +212,12 @@ pub fn print_messages(
             colors_and_msgs
         })
         .collect::<Vec<_>>();
-    
+
     // we should never hit this but just a safeguard so that
     // if the msg array grows larger than a u16 we don't
-    // fail to cast the len/indx to a u16 below 
-    if msgs.len() >  u16::MAX as usize {
-        msgs = msgs[0..(u16::MAX as usize -1)].to_vec();
+    // fail to cast the len/indx to a u16 below
+    if msgs.len() > u16::MAX as usize {
+        msgs = msgs[0..(u16::MAX as usize - 1)].to_vec();
         msgs.push((&default_color, "...".to_string()));
     }
 
