@@ -2,6 +2,7 @@ use std::error::Error;
 use std::io::{stdout, Stdout, Write};
 
 use termion::color::{self, Bg, Color, Fg};
+use termion::event::Key;
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::{clear, cursor, style, terminal_size};
 
@@ -10,7 +11,6 @@ use crate::state::State;
 
 const UP: char = '▲';
 const DOWN: char = '▼';
-const RIGHT: char = '▶';
 static ANSI_PREFIX: &str = "ansi";
 
 fn color_from_config_string(s: &str) -> Result<Box<dyn Color>, Box<dyn Error>> {
@@ -84,24 +84,162 @@ fn get_status_arrow_and_color(state: &State, process: &Process) -> (Box<dyn Colo
         }
     }
 }
+fn key_to_str(key: &Key) -> String {
+    fn to_printable_char(c: &char) -> char {
+        if *c == '\n' {
+            '↵'
+        } else {
+            *c
+        }
+    }
+    match key {
+        Key::Char(c) => format!("{}", to_printable_char(c)),
+        Key::Alt(c) => format!("⎇-{}", to_printable_char(c)),
+        Key::Ctrl(c) => format!("^-{}", to_printable_char(c)),
+        Key::Left => "←".to_string(),
+        Key::Right => "→".to_string(),
+        Key::Up => "↑".to_string(),
+        Key::Down => "↓".to_string(),
+        Key::Backspace => "⎵".to_string(),
+        Key::Delete => "⌫".to_string(),
+        Key::End => "end".to_string(),
+        Key::Esc => "esc".to_string(),
+        Key::F(i) => format!("fn-{}", i),
+        Key::Home => "home".to_string(),
+        Key::Insert => "ins".to_string(),
+        Key::Null => "null".to_string(),
+        Key::PageDown => "pgdn".to_string(),
+        Key::PageUp => "pgup".to_string(),
+        Key::BackTab => "backtab".to_string(),
+        Key::__IsNotComplete => "".to_string(),
+    }
+}
+fn keys_to_str(keys: &[Key]) -> String {
+    keys.iter()
+        .map(key_to_str)
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+fn condense_to_width(width: usize, s: &str) -> Vec<String> {
+    let condensed = s
+        .chars()
+        .collect::<Vec<char>>()
+        .chunks(width)
+        .map(|chunk| chunk.iter().collect::<String>())
+        .collect::<Vec<String>>();
+    condensed
+}
 
+pub fn get_help_messages(state: &State) -> Vec<(Box<dyn Color>, String)> {
+    let mut msg: Vec<String> = vec![];
+    let keybindings = &state.config.keybinding;
+    msg.push(format!(
+        "<{}> {}",
+        keys_to_str(keybindings.quit.as_slice()),
+        "quit"
+    ));
+    msg.push(format!(
+        "<{}> {}",
+        keys_to_str(keybindings.start.as_slice()),
+        "start"
+    ));
+    msg.push(format!(
+        "<{}> {}",
+        keys_to_str(keybindings.stop.as_slice()),
+        "stop"
+    ));
+    msg.push(format!(
+        "<{}> {}",
+        keys_to_str(keybindings.up.as_slice()),
+        "up"
+    ));
+    msg.push(format!(
+        "<{}> {}",
+        keys_to_str(keybindings.down.as_slice()),
+        "down"
+    ));
+    msg.push(format!(
+        "<{}> {}",
+        keys_to_str(keybindings.filter.as_slice()),
+        "filter"
+    ));
+    msg.push(format!(
+        "<{}> {}",
+        keys_to_str(keybindings.filter_submit.as_slice()),
+        "filter_submit"
+    ));
+    msg.push(format!(
+        "<{}> {}",
+        keys_to_str(keybindings.switch_focus.as_slice()),
+        "switch_focus"
+    ));
+
+    // try to make as may keybindings fit on one line as possible.
+    // once the line length exceeds the process list width, start a new line.
+    msg = msg.iter().fold(vec![], |mut acc, next| {
+        let last = acc.last();
+        if let Some(last) = last {
+            let merged = format!("{} | {}", last, next);
+            if merged.len() > state.config.layout.process_list_width {
+                acc.push(next.clone());
+            } else {
+                acc.remove(acc.len() - 1);
+                acc.push(merged);
+            }
+        } else {
+            acc.push(next.clone());
+        }
+        acc
+    });
+
+    msg.iter()
+        .map(|msg| (Box::new(color::White) as Box<dyn Color>, msg.clone()))
+        .collect::<Vec<(Box<dyn Color>, String)>>()
+}
 pub fn print_messages(
+    state: &State,
     mut stdout: &Stdout,
     msgs: &[(Box<dyn Color>, String)],
 ) -> Result<(), Box<dyn Error>> {
+    let default_color = Box::new(color::White) as Box<dyn Color>;
     let (_, height) = terminal_size()?;
+
+    // take the list of messages and for any message that is longer than the
+    // the process list width, split it into multiple messages
+    // and then flatten the list of messages
+    let mut msgs = msgs
+        .iter()
+        .flat_map(|col_msg| {
+            let (color, msg) = col_msg;
+            let colors_and_msgs = condense_to_width(state.config.layout.process_list_width, msg)
+                .iter()
+                .map(|msg| (color, msg.clone()))
+                .collect::<Vec<_>>();
+            colors_and_msgs
+        })
+        .collect::<Vec<_>>();
+
+    // we should never hit this but just a safeguard so that
+    // if the msg array grows larger than a u16 we don't
+    // fail to cast the len/indx to a u16 below
+    if msgs.len() > u16::MAX as usize {
+        msgs = msgs[0..(u16::MAX as usize - 1)].to_vec();
+        msgs.push((&default_color, "...".to_string()));
+    }
+
     for (idx, color_and_msg) in msgs.iter().enumerate() {
         let (color, msg) = color_and_msg;
         write!(
             stdout,
             "{}{}{}",
-            cursor::Goto(0, height - idx as u16),
+            cursor::Goto(0, height - msgs.len() as u16 + idx as u16),
             Fg(color.as_ref()),
             msg
         )?;
     }
     Ok(())
 }
+
 pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Error>> {
     write!(stdout, "{}", clear::All)?;
     let mut y_offset = 1;
@@ -117,7 +255,7 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
             cursor::Goto(0, y_offset as u16),
             Fg(color::White),
             style::Bold,
-            RIGHT,
+            state.config.style.pointer_char,
             filter_text,
             style::Reset
         )?;
@@ -158,15 +296,20 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
     }
     let current_proc = state.current_process();
     let mut all_msgs: Vec<(Box<dyn Color>, String)> = vec![];
+
     // add process descriptions / short-help text
-    if !state.config.layout.hide_help {
-        if let Some(current_proc) = current_proc {
+    if let Some(current_proc) = current_proc {
+        if !state.config.layout.hide_process_description_panel {
             let desc = &current_proc.config.description;
             all_msgs.push((
                 Box::new(color::White) as Box<dyn Color>,
                 desc.clone().unwrap_or("".to_string()),
             ));
         }
+    }
+
+    if !state.config.layout.hide_help {
+        all_msgs.extend(get_help_messages(state));
     }
     // add error messages
     state
@@ -175,7 +318,7 @@ pub fn draw_screen(mut stdout: &Stdout, state: &State) -> Result<(), Box<dyn Err
         .iter()
         .map(|m| (Box::new(color::Red) as Box<dyn Color>, m.to_string()))
         .for_each(|m| all_msgs.push(m));
-    print_messages(stdout, all_msgs.as_slice())?;
+    print_messages(state, stdout, all_msgs.as_slice())?;
 
     stdout.flush()?;
     Ok(())
