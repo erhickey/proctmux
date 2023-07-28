@@ -1,4 +1,5 @@
 mod args;
+mod boolean_condvar;
 mod config;
 mod controller;
 mod daemon;
@@ -14,8 +15,10 @@ mod tmux_daemon;
 use std::error::Error;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
+use std::thread::spawn;
 
 use args::parse_config_from_args;
+use boolean_condvar::BooleanCondvar;
 use controller::Controller;
 use daemon::receive_dead_pids;
 use input::input_loop;
@@ -42,10 +45,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.general.kill_existing_session,
     )?;
 
+    let exit_guard = Arc::new(BooleanCondvar::new());
     let mut tmux_daemon_attached = TmuxDaemon::new(&tmux_context.session_id)?;
     let mut tmux_daemon_detached = TmuxDaemon::new(&tmux_context.detached_session_id)?;
     let state = State::new(&config);
-    let controller = Arc::new(Mutex::new(Controller::new(state, tmux_context)?));
+    let controller = Arc::new(Mutex::new(Controller::new(
+        state,
+        tmux_context,
+        exit_guard.clone(),
+    )?));
     let (sender, receiver) = channel();
 
     receive_dead_pids(receiver, controller.clone());
@@ -78,11 +86,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     tmux_daemon_detached.listen_for_dead_panes(sender)?;
 
     controller.lock().unwrap().on_startup()?;
-    input_loop(controller.clone(), config.keybinding)?;
+    let input_controller = controller.clone();
+    spawn(|| input_loop(input_controller, config.keybinding));
+
+    if let Err(e) = exit_guard.wait() {
+        error!("Error waiting for exit guard: {}", e);
+    }
+
+    info!("Exiting proctmux");
 
     tmux_daemon_attached.kill()?;
     tmux_daemon_detached.kill()?;
-    controller.lock().unwrap().on_exit()?;
+    controller.lock().unwrap().on_exit();
 
     Ok(())
 }

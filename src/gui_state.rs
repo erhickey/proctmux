@@ -1,6 +1,6 @@
 use crate::state::Mutator;
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GUIState {
     pub messages: Vec<String>,
     pub filter_text: Option<String>,

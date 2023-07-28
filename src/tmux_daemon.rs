@@ -51,7 +51,7 @@ impl TmuxDaemon {
 
     pub fn kill(&mut self) -> std::io::Result<ExitStatus> {
         info!(
-            "Killing tmux control mode (Session: {}) process",
+            "Killing tmux control mode process (Session: {})",
             self.session_id
         );
         self.running.store(false, Ordering::Relaxed);
