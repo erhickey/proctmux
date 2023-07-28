@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::io::Result as IoResult;
-use std::process::{Child, Command, Stdio, Output};
+use std::process::{Child, Command, Output, Stdio};
 
 fn clean_output(s: &str) -> String {
     s.replace("\n", "")
@@ -68,7 +69,7 @@ pub fn break_pane(
     pane_id: &str,
     dest_session: &str,
     dest_window: usize,
-    window_label: &str
+    window_label: &str,
 ) -> IoResult<Output> {
     Command::new("tmux")
         .arg("break-pane")
@@ -104,40 +105,72 @@ pub fn kill_pane(pane_id: &str) -> IoResult<Output> {
         .output()
 }
 
-pub fn create_pane(pane_id: &str, command: &str) -> IoResult<Output> {
-    Command::new("tmux")
-        .arg("split-window")
-        .arg("-d")
-        .arg("-h")
-        .arg("-l")
-        .arg("70%")
-        .arg("-t")
-        .arg(pane_id)
-        .arg("-P")
-        .arg("-F")
-        .arg("#{pane_id}")
-        .arg(command)
-        .output()
+fn add_env_variables<'a>(
+    mut command: &'a mut Command,
+    env: &Option<HashMap<String, Option<String>>>,
+) -> &'a mut Command {
+    if let Some(hm) = env {
+        for (k, v) in hm.iter() {
+            command =
+                command
+                    .arg("-e")
+                    .arg(format!("{}={}", k, v.clone().unwrap_or("".to_string())));
+        }
+    }
+    command
+}
+
+pub fn create_pane(
+    pane_id: &str,
+    command: &str,
+    working_directory: &str,
+    env: &Option<HashMap<String, Option<String>>>,
+) -> IoResult<Output> {
+    let mut c = Command::new("tmux");
+    add_env_variables(
+        c.arg("split-window")
+            .arg("-d")
+            .arg("-h")
+            .arg("-l")
+            .arg("70%")
+            .arg("-t")
+            .arg(pane_id)
+            .arg("-c")
+            .arg(working_directory)
+            .arg("-P")
+            .arg("-F")
+            .arg("#{pane_id}"),
+        env,
+    )
+    .arg(command)
+    .output()
 }
 
 pub fn create_detached_pane(
     dest_session: &str,
     dest_window: usize,
     window_label: &str,
-    command: &str
+    command: &str,
+    working_directory: &str,
+    env: &Option<HashMap<String, Option<String>>>,
 ) -> IoResult<Output> {
-    Command::new("tmux")
-        .arg("new-window")
-        .arg("-d")
-        .arg("-t")
-        .arg(format!("{}:{}", dest_session, dest_window))
-        .arg("-n")
-        .arg(window_label)
-        .arg("-P")
-        .arg("-F")
-        .arg("#{pane_id}")
-        .arg(command)
-        .output()
+    let mut c = Command::new("tmux");
+    add_env_variables(
+        c.arg("new-window")
+            .arg("-d")
+            .arg("-t")
+            .arg(format!("{}:{}", dest_session, dest_window))
+            .arg("-n")
+            .arg(window_label)
+            .arg("-c")
+            .arg(working_directory)
+            .arg("-P")
+            .arg("-F")
+            .arg("#{pane_id}"),
+        env,
+    )
+    .arg(command)
+    .output()
 }
 
 pub fn get_pane_pid(pane_id: &str) -> IoResult<Output> {

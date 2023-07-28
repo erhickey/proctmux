@@ -3,8 +3,10 @@ mod config;
 mod controller;
 mod daemon;
 mod draw;
+mod gui_state;
 mod input;
-mod model;
+mod process;
+mod state;
 mod tmux;
 mod tmux_context;
 mod tmux_daemon;
@@ -13,13 +15,11 @@ use std::error::Error;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 
-use log::info;
-
 use args::parse_config_from_args;
 use controller::Controller;
 use daemon::receive_dead_pids;
 use input::input_loop;
-use model::State;
+use state::State;
 use tmux_context::TmuxContext;
 use tmux_daemon::TmuxDaemon;
 
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let file = std::fs::File::create(config.log_file.clone()).unwrap();
     env_logger::builder()
         .target(env_logger::Target::Pipe(Box::new(file)))
-        .filter_level(log::LevelFilter::Trace)
+        .filter_level(log::LevelFilter::Debug)
         .init();
 
     info!("Starting proctmux");
@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     tmux_daemon_detached.listen_for_dead_panes(sender)?;
 
     controller.lock().unwrap().on_startup()?;
-    input_loop(controller.clone())?;
+    input_loop(controller.clone(), config.keybinding)?;
 
     tmux_daemon_attached.kill()?;
     tmux_daemon_detached.kill()?;
