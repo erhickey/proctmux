@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::io::Stdout;
+use std::process;
 use std::sync::Mutex;
 
 use termion::raw::RawTerminal;
@@ -41,9 +42,7 @@ impl Controller {
                     self.draw_screen(&state)
                 }
                 Ok(None) => Ok(()),
-                Err(e) => {
-                    return Err(e);
-                }
+                Err(e) => Err(e),
             },
             Err(e) => {
                 error!("lock_and_load => Failed to lock state: {}", e);
@@ -126,7 +125,7 @@ impl Controller {
             let mut new_state = state.clone();
             for process in &state.processes {
                 if process.config.autostart {
-                    match start_process(&new_state, &self.tmux_context, &process) {
+                    match start_process(&new_state, &self.tmux_context, process) {
                         Ok(Some(s)) => new_state = s,
                         Ok(None) => {}
                         Err(e) => error!("Error auto-starting process {}: {}", process.label, e),
@@ -144,18 +143,27 @@ impl Controller {
     }
 
     pub fn on_keypress_quit(&self) -> Result<(), Box<dyn Error>> {
-        trace!("on_keypress_quit");
+        info!("on_keypress_quit");
+
+        // first set state flag that indicates to the rest of the app that
+        // we are actively quiting
+        self.lock_and_load(|state| Ok(Some(StateMutation::on(state).begin_quitting().commit())))?;
+
+        // time to massacre all processes
         self.lock_and_load(|state| {
-            state
-                .processes
-                .iter()
-                .filter(|process| process.status == ProcessStatus::Halted)
-                .for_each(|process| {
-                    if let Some(pane_id) = &process.pane_id {
-                        let _ = tmux::kill_pane(pane_id);
-                    }
-                });
-            // quitting, no need to track state changes
+            state.processes.iter().for_each(|process| {
+                halt_process(state, Some(process)).unwrap();
+            });
+
+            // state
+            //     .processes
+            //     .iter()
+            //     .filter(|process| process.status == ProcessStatus::Halted)
+            //     .for_each(|process| {
+            //         if let Some(pane_id) = &process.pane_id {
+            //             let _ = tmux::kill_pane(pane_id);
+            //         }
+            //     });
             Ok(None)
         })
     }
@@ -234,11 +242,11 @@ impl Controller {
     }
 
     pub fn on_pid_terminated(&self, pid: i32) -> Result<(), Box<dyn Error>> {
-        trace!("on_pid_terminated: {}", pid);
+        info!("on_pid_terminated: {}", pid);
         self.lock_and_load(|state| {
             let process = state.get_process_by_pid(pid);
             let new_state = set_process_terminated(state, process);
-            if new_state.is_some() {
+            if let Some(n) = &new_state {
                 info!("pid terminated: {}", pid);
                 if let Some(e) = tmux::select_pane(&self.tmux_context.pane_id).err() {
                     error!(
@@ -248,6 +256,18 @@ impl Controller {
                 }
             }
             Ok(new_state.or(Some(state.clone())))
+        })?;
+        self.lock_and_load(|state| {
+            if state.quitting
+                && state
+                    .processes
+                    .iter()
+                    .all(|p| p.status == ProcessStatus::Halted)
+            {
+                info!("all processes terminated and quitting is true");
+                process::exit(0);
+            }
+            Ok(None)
         })
     }
 }
@@ -301,7 +321,7 @@ fn kill_pane(state: &State, process: &Process) -> Result<Option<State>, Box<dyn 
                         .set_process_pane_id(None, process.id)
                         .commit(),
                 )),
-                Err(e) => return Err(Box::new(e)),
+                Err(e) => Err(Box::new(e)),
             }
         }
         None => Ok(None),
@@ -333,6 +353,7 @@ fn set_process_terminated(state: &State, process: Option<&Process>) -> Option<St
 }
 
 fn halt_process(state: &State, process: Option<&Process>) -> Result<Option<State>, Box<dyn Error>> {
+    trace!("in halt_process process: {:?}", process);
     match process {
         Some(p) => {
             if p.status != ProcessStatus::Running {

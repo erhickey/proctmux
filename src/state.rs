@@ -10,6 +10,7 @@ pub struct State {
     pub current_proc_id: usize,
     pub processes: Vec<Process>,
     pub gui_state: GUIState,
+    pub quitting: bool,
 }
 
 impl State {
@@ -28,6 +29,7 @@ impl State {
                 filter_text: None,
                 entering_filter_text: false,
             },
+            quitting: false,
         }
     }
 
@@ -194,6 +196,11 @@ impl StateMutation {
 
     pub fn set_gui_state(mut self, gui_state: GUIState) -> Self {
         self.init_state.gui_state = gui_state;
+        self
+    }
+
+    pub fn begin_quitting(mut self) -> Self {
+        self.init_state.quitting = true;
         self
     }
 }
