@@ -174,20 +174,22 @@ pub fn get_help_messages(state: &State) -> Vec<(Box<dyn Color>, String)> {
         "switch_focus"
     ));
 
-    msg = msg.iter().fold(vec![], |mut a, b| {
-        let last = a.last();
+    // try to make as may keybindings fit on one line as possible.
+    // once the line length exceeds the process list width, start a new line.
+    msg = msg.iter().fold(vec![], |mut acc, next| {
+        let last = acc.last();
         if let Some(last) = last {
-            let merged = format!("{} | {}", last, b);
+            let merged = format!("{} | {}", last, next);
             if merged.len() > state.config.layout.process_list_width {
-                a.push(b.clone());
+                acc.push(next.clone());
             } else {
-                a.remove(a.len() - 1);
-                a.push(merged);
+                acc.remove(acc.len() - 1);
+                acc.push(merged);
             }
         } else {
-            a.push(b.clone());
+            acc.push(next.clone());
         }
-        a
+        acc
     });
 
     msg.iter()
@@ -201,6 +203,10 @@ pub fn print_messages(
 ) -> Result<(), Box<dyn Error>> {
     let default_color = Box::new(color::White) as Box<dyn Color>;
     let (_, height) = terminal_size()?;
+
+    // take the list of messages and for any message that is longer than the
+    // the process list width, split it into multiple messages
+    // and then flatten the list of messages
     let mut msgs = msgs
         .iter()
         .flat_map(|col_msg| {
