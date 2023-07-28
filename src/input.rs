@@ -1,13 +1,15 @@
 use std::error::Error;
 use std::io::stdin;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
+use termion::async_stdin;
 use termion::{event::Key, input::TermRead};
 
 use crate::config::KeybindingConfig;
 use crate::controller::Controller;
 
-pub fn input_loop(controller: Arc<Mutex<Controller>>, keybinding: KeybindingConfig) {
+pub fn input_loop(controller: Arc<Mutex<Controller>>, keybinding: KeybindingConfig, running: Arc<AtomicBool>) {
     let stdin = stdin();
 
     for c in stdin.keys() {
@@ -21,12 +23,10 @@ pub fn input_loop(controller: Arc<Mutex<Controller>>, keybinding: KeybindingConf
                         error!("Error handling filter keypress {:?}: {}", key, e);
                     }
                 } else {
-                    if let Err(e) =
-                        handle_normal_mode_keypresses(controller.clone(), key, &keybinding)
-                    {
-                        error!("Error handling keypress {:?}: {}", key, e);
-                        // TODO: remove this break, see TODO below
-                        break;
+                    match handle_normal_mode_keypresses(controller.clone(), key, &keybinding) {
+                        Ok(true) => break,
+                        Ok(false) => {},
+                        Err(e) => error!("Error handling keypress {:?}: {}", key, e)
                     }
                 }
             }
@@ -34,6 +34,36 @@ pub fn input_loop(controller: Arc<Mutex<Controller>>, keybinding: KeybindingConf
                 error!("Error reading stdin: {}", e);
             }
         }
+    }
+
+    // broken out of synchronous read of stdin due to quit key being pressed
+    // switch to asynchronous read so we can close stdin once it is time to exit
+    let mut a_stdin = async_stdin().keys();
+
+    while running.load(std::sync::atomic::Ordering::Relaxed) {
+        match a_stdin.next() {
+            Some(Ok(key)) => {
+                if controller.lock().unwrap().is_entering_filter_text() {
+                    if let Err(e) =
+                        handle_filter_entry_keypresses(controller.clone(), key, &keybinding)
+                    {
+                        error!("Error handling filter keypress {:?}: {}", key, e);
+                    }
+                } else {
+                    match handle_normal_mode_keypresses(controller.clone(), key, &keybinding) {
+                        Ok(true) => break,
+                        Ok(false) => {},
+                        Err(e) => error!("Error handling keypress {:?}: {}", key, e)
+                    }
+                }
+            }
+            Some(Err(e)) => {
+                error!("Error reading stdin: {}", e);
+            },
+            None => {}
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
     }
 }
 
@@ -79,13 +109,10 @@ fn handle_normal_mode_keypresses(
     controller: Arc<Mutex<Controller>>,
     key: Key,
     keybinding: &KeybindingConfig,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<bool, Box<dyn Error>> {
     if keybinding.quit.contains(&key) {
         controller.lock().unwrap().on_keypress_quit()?;
-        // Throwing an error to break the stdin loop and close stdin
-        // TODO: probably use async_stdin and the booleancondvar to
-        // watch for when the stdin loop should be broken
-        return Err(Box::new(core::fmt::Error {}));
+        return Ok(true);
     } else if keybinding.down.contains(&key) {
         controller.lock().unwrap().on_keypress_down()?;
     } else if keybinding.up.contains(&key) {
@@ -99,5 +126,5 @@ fn handle_normal_mode_keypresses(
     } else if keybinding.switch_focus.contains(&key) {
         controller.lock().unwrap().on_keypress_switch_focus()?;
     }
-    Ok(())
+    Ok(false)
 }

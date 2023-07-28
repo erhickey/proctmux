@@ -1,10 +1,10 @@
 use std::error::Error;
 use std::io::Stdout;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use termion::raw::RawTerminal;
 
-use crate::boolean_condvar::BooleanCondvar;
 use crate::draw::{draw_screen, init_screen, prepare_screen_for_exit};
 use crate::gui_state::GUIStateMutation;
 use crate::process::{Process, ProcessStatus};
@@ -16,20 +16,20 @@ pub struct Controller {
     state: Mutex<State>,
     tmux_context: TmuxContext,
     stdout: RawTerminal<Stdout>,
-    exit_guard: Arc<BooleanCondvar>,
+    running: Arc<AtomicBool>,
 }
 
 impl Controller {
     pub fn new(
         state: State,
         tmux_context: TmuxContext,
-        exit_guard: Arc<BooleanCondvar>,
+        running: Arc<AtomicBool>,
     ) -> Result<Self, Box<dyn Error>> {
         Ok(Controller {
             state: Mutex::new(state),
             tmux_context,
             stdout: init_screen()?,
-            exit_guard,
+            running,
         })
     }
 
@@ -314,9 +314,7 @@ impl Controller {
                 .find(|p| p.status != ProcessStatus::Halted)
                 .is_none()
             {
-                if let Err(e) = self.exit_guard.stop() {
-                    error!("Error stopping exit_guard: {}", e);
-                }
+                self.running.store(false, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }
