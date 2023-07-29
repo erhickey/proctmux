@@ -8,7 +8,7 @@ layout:
   # the prompt_toolkit width of the sidebar (containing all the process names)
   processes_list_width: 31
   # whether to sort the process list alphabetically
-  sort_process_list_alpha: True
+  sort_process_list_alpha: false 
 style:
   #foreground color of the process in the process list when it is selected
   selected_process_color: 'ansiblack'
