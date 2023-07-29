@@ -10,6 +10,9 @@ mod state;
 mod tmux;
 mod tmux_context;
 mod tmux_daemon;
+mod frame;
+mod repr;
+mod constants;
 
 use std::error::Error;
 use std::sync::atomic::AtomicBool;
