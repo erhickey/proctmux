@@ -19,7 +19,7 @@ fn default_layout() -> LayoutConfig {
         hide_help: default_hide_help(),
         hide_process_description_panel: default_hide_process_description_panel(),
         process_list_width: default_process_list_width(),
-        sort_prcess_list_alpha: default_sort_process_list_alpha(),
+        sort_process_list_alpha: default_sort_process_list_alpha(),
         category_search_prefix: default_category_search_prefix(),
     }
 }
@@ -264,7 +264,7 @@ pub struct LayoutConfig {
     #[serde(default = "default_process_list_width")]
     pub process_list_width: usize,
     #[serde(default = "default_sort_process_list_alpha")]
-    pub sort_prcess_list_alpha: bool,
+    pub sort_process_list_alpha: bool,
     #[serde(default = "default_category_search_prefix")]
     pub category_search_prefix: String,
     // #[serde(default = "default_field_replacement_prompt")]
