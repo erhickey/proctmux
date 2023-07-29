@@ -51,8 +51,7 @@ pub fn input_loop(controller: Arc<Mutex<Controller>>, keybinding: KeybindingConf
                     }
                 } else {
                     match handle_normal_mode_keypresses(controller.clone(), key, &keybinding) {
-                        Ok(true) => break,
-                        Ok(false) => {},
+                        Ok(_) => {},
                         Err(e) => error!("Error handling keypress {:?}: {}", key, e)
                     }
                 }
