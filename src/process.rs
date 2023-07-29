@@ -7,7 +7,7 @@ pub enum ProcessStatus {
     Halted = 3,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Process {
     pub id: usize,
     pub label: String,

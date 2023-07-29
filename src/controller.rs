@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::io::Stdout;
-use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 use termion::raw::RawTerminal;
 
@@ -15,14 +16,20 @@ pub struct Controller {
     state: Mutex<State>,
     tmux_context: TmuxContext,
     stdout: RawTerminal<Stdout>,
+    running: Arc<AtomicBool>,
 }
 
 impl Controller {
-    pub fn new(state: State, tmux_context: TmuxContext) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        state: State,
+        tmux_context: TmuxContext,
+        running: Arc<AtomicBool>,
+    ) -> Result<Self, Box<dyn Error>> {
         Ok(Controller {
             state: Mutex::new(state),
             tmux_context,
             stdout: init_screen()?,
+            running,
         })
     }
 
@@ -38,6 +45,7 @@ impl Controller {
             Ok(mut state) => match f(&state) {
                 Ok(Some(new_state)) => {
                     *state = new_state;
+                    self.check_for_exit(&state);
                     self.draw_screen(&state)
                 }
                 Ok(None) => Ok(()),
@@ -137,26 +145,67 @@ impl Controller {
         })
     }
 
-    pub fn on_exit(&self) -> Result<(), Box<dyn Error>> {
+    pub fn on_exit(&self) {
         trace!("on_exit");
-        self.tmux_context.cleanup()?;
-        prepare_screen_for_exit(&self.stdout)
+        if let Err(e) = self.lock_and_load(|state| {
+            Ok(Some(
+                state
+                    .processes
+                    .iter()
+                    .filter(|process| process.status == ProcessStatus::Halted)
+                    .fold(state.clone(), |acc, process| {
+                        match kill_pane(&acc, process) {
+                            Ok(Some(s)) => s,
+                            Ok(None) => acc,
+                            Err(e) => {
+                                error!(
+                                    "Error killing pane for process {} in on_exit: {}",
+                                    process.label, e
+                                );
+                                acc
+                            }
+                        }
+                    }),
+            ))
+        }) {
+            error!("Error killing panes in on_exit: {}", e);
+        }
+
+        if let Err(e) = self.tmux_context.cleanup() {
+            error!("Error cleaning up tmux context in on_exit: {}", e);
+        }
+
+        if let Err(e) = prepare_screen_for_exit(&self.stdout) {
+            error!("Error preparing screen for exit in on_exit: {}", e);
+        }
     }
 
     pub fn on_keypress_quit(&self) -> Result<(), Box<dyn Error>> {
         trace!("on_keypress_quit");
         self.lock_and_load(|state| {
-            state
-                .processes
-                .iter()
-                .filter(|process| process.status == ProcessStatus::Halted)
-                .for_each(|process| {
-                    if let Some(pane_id) = &process.pane_id {
-                        let _ = tmux::kill_pane(pane_id);
-                    }
-                });
-            // quitting, no need to track state changes
-            Ok(None)
+            if state.exiting {
+                return Ok(None);
+            }
+            let new_state = StateMutation::on(state).set_exiting().commit();
+            Ok(Some(
+                new_state
+                    .processes
+                    .iter()
+                    .filter(|process| process.status != ProcessStatus::Halted)
+                    .fold(new_state.clone(), |acc, process| {
+                        match halt_process(&acc, Some(process)) {
+                            Ok(Some(s)) => s,
+                            Ok(None) => acc,
+                            Err(e) => {
+                                error!(
+                                    "Error halting process {} in on_keypress_quit: {}",
+                                    process.label, e
+                                );
+                                acc
+                            }
+                        }
+                    }),
+            ))
         })
     }
 
@@ -198,28 +247,34 @@ impl Controller {
 
     pub fn on_keypress_start(&self) -> Result<(), Box<dyn Error>> {
         trace!("on_keypress_start");
-        self.lock_and_load(|state| match state.current_process() {
-            Some(process) => {
-                let kill_pane_state = kill_pane(state, process)?.unwrap_or(state.clone());
+        self.lock_and_load(|state| {
+            if state.exiting {
+                Ok(None)
+            } else {
+                match state.current_process() {
+                    Some(process) => {
+                        let kill_pane_state = kill_pane(state, process)?.unwrap_or(state.clone());
 
-                match start_process(&kill_pane_state, &self.tmux_context, process) {
-                    Ok(Some(sp_state)) => {
-                        if process.config.autofocus {
-                            trace!("Auto-focusing {}", process.label);
-                            if let Some(e) = focus_active_pane(&sp_state).err() {
-                                error!("Error auto-focusing {}: {}", process.label, e);
+                        match start_process(&kill_pane_state, &self.tmux_context, process) {
+                            Ok(Some(sp_state)) => {
+                                if process.config.autofocus {
+                                    trace!("Auto-focusing {}", process.label);
+                                    if let Some(e) = focus_active_pane(&sp_state).err() {
+                                        error!("Error auto-focusing {}: {}", process.label, e);
+                                    }
+                                }
+                                Ok(Some(sp_state))
+                            }
+                            Ok(None) => Ok(Some(kill_pane_state)),
+                            Err(e) => {
+                                error!("Error starting process {}: {}", process.label, e);
+                                Ok(Some(kill_pane_state))
                             }
                         }
-                        Ok(Some(sp_state))
                     }
-                    Ok(None) => Ok(Some(kill_pane_state)),
-                    Err(e) => {
-                        error!("Error starting process {}: {}", process.label, e);
-                        Ok(Some(kill_pane_state))
-                    }
+                    None => Ok(None),
                 }
             }
-            None => Ok(None),
         })
     }
 
@@ -249,6 +304,19 @@ impl Controller {
             }
             Ok(new_state.or(Some(state.clone())))
         })
+    }
+
+    pub fn check_for_exit(&self, state: &State) {
+        if state.exiting {
+            if state
+                .processes
+                .iter()
+                .find(|p| p.status != ProcessStatus::Halted)
+                .is_none()
+            {
+                self.running.store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
     }
 }
 

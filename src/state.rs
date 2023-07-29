@@ -4,12 +4,13 @@ use crate::config::ProcTmuxConfig;
 use crate::gui_state::GUIState;
 use crate::process::{Process, ProcessStatus};
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct State {
     pub config: ProcTmuxConfig,
     pub current_proc_id: usize,
     pub processes: Vec<Process>,
     pub gui_state: GUIState,
+    pub exiting: bool,
 }
 
 impl State {
@@ -28,6 +29,7 @@ impl State {
                 filter_text: None,
                 entering_filter_text: false,
             },
+            exiting: false,
         }
     }
 
@@ -194,6 +196,11 @@ impl StateMutation {
 
     pub fn set_gui_state(mut self, gui_state: GUIState) -> Self {
         self.init_state.gui_state = gui_state;
+        self
+    }
+
+    pub fn set_exiting(mut self) -> Self {
+        self.init_state.exiting = true;
         self
     }
 }

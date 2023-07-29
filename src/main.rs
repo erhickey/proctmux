@@ -12,6 +12,7 @@ mod tmux_context;
 mod tmux_daemon;
 
 use std::error::Error;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 
@@ -42,10 +43,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.general.kill_existing_session,
     )?;
 
+    let running = Arc::new(AtomicBool::new(true));
     let mut tmux_daemon_attached = TmuxDaemon::new(&tmux_context.session_id)?;
     let mut tmux_daemon_detached = TmuxDaemon::new(&tmux_context.detached_session_id)?;
     let state = State::new(&config);
-    let controller = Arc::new(Mutex::new(Controller::new(state, tmux_context)?));
+    let controller = Arc::new(Mutex::new(Controller::new(
+        state,
+        tmux_context,
+        running.clone(),
+    )?));
     let (sender, receiver) = channel();
 
     receive_dead_pids(receiver, controller.clone());
@@ -78,11 +84,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     tmux_daemon_detached.listen_for_dead_panes(sender)?;
 
     controller.lock().unwrap().on_startup()?;
-    input_loop(controller.clone(), config.keybinding)?;
+    input_loop(controller.clone(), config.keybinding, running);
+
+    info!("Exiting proctmux");
 
     tmux_daemon_attached.kill()?;
     tmux_daemon_detached.kill()?;
-    controller.lock().unwrap().on_exit()?;
+    controller.lock().unwrap().on_exit();
 
     Ok(())
 }
