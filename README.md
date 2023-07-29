@@ -8,9 +8,6 @@ This app is intended to be a drop-in replacement of [procmux](https://github.com
 
 List of features requiring development to bring proctmux near parity with procmux:
 
-- General:
-    - wait for processes to end on quit
-    - help
 - Display:
     - sort process list
 - Processes:
