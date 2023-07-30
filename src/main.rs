@@ -1,11 +1,14 @@
 mod args;
 mod config;
+mod constants;
 mod controller;
 mod daemon;
 mod draw;
+mod frame;
 mod gui_state;
 mod input;
 mod process;
+mod repr;
 mod state;
 mod tmux;
 mod tmux_context;
