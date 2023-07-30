@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::error::Error;
 use std::fmt::Display;
 use std::io::{stdout, Stdout, Write};
@@ -8,7 +9,7 @@ use termion::{clear, cursor, style, terminal_size};
 
 use crate::frame::{
     break_at_natural_break_points, wrap_lines_to_width, wrap_to_width, ColoredSegment,
-    ProcessPanelFrame,
+    Partitionable, ProcessPanelFrame,
 };
 use crate::repr::{color_from_config_string, get_status_arrow_and_color, keybinding_help};
 use crate::state::State;
@@ -79,9 +80,9 @@ fn get_filter_frame_line(state: &State) -> Option<Vec<ColoredSegment>> {
     None
 }
 
-fn get_process_lines(state: &State) -> Vec<Vec<ColoredSegment>> {
+fn get_process_lines(state: &State) -> (Vec<Vec<ColoredSegment>>, Option<usize>) {
     let process_label_width = state.config.layout.process_list_width - 3;
-
+    let mut current_process_line_index = None;
     let mut lines: Vec<Vec<ColoredSegment>> = vec![];
     for proc in state.get_filtered_processes().iter() {
         if state.current_proc_id == proc.id {
@@ -101,6 +102,7 @@ fn get_process_lines(state: &State) -> Vec<Vec<ColoredSegment>> {
                     .set_width(process_label_width),
             ];
             lines.push(line);
+            current_process_line_index = Some(lines.len() - 1);
         } else {
             let fg = color_from_config_string(&state.config.style.unselected_process_color)
                 .unwrap_or(Box::new(color::Cyan));
@@ -115,7 +117,7 @@ fn get_process_lines(state: &State) -> Vec<Vec<ColoredSegment>> {
             lines.push(line);
         }
     }
-    lines
+    (lines, current_process_line_index)
 }
 
 fn get_message_lines(state: &State) -> Vec<ColoredSegment> {
@@ -153,7 +155,9 @@ fn get_message_lines(state: &State) -> Vec<ColoredSegment> {
 pub fn construct_frame(state: &State) -> ProcessPanelFrame {
     let mut frame = ProcessPanelFrame::new(state.config.layout.process_list_width);
     frame.set_filter_line(get_filter_frame_line(state));
-    frame.set_process_lines(get_process_lines(state));
+    let (proc_lines, current_idx) = get_process_lines(state);
+    frame.set_process_lines(proc_lines);
+    frame.set_current_process_line_index(current_idx);
     frame.set_messages(get_message_lines(state));
     frame
 }
@@ -179,9 +183,6 @@ pub fn draw_colored_segment(
 }
 
 fn draw_frame(mut stdout: &Stdout, frame: &ProcessPanelFrame) -> Result<(), Box<dyn Error>> {
-    // TODO - check for terminal height make sure things will fit (truncate / ellipsize if necessary)
-    // TODO - maybe a fallback condition to draw an error if the screen is too small for displaying anything
-    // TODO - maybe simulate scrolling if the process list is too long
     let (_, height) = terminal_size()?;
     fn goto_from_top(mut stdout: &Stdout, y: u16) -> Result<(), Box<dyn Error>> {
         write!(stdout, "{}", cursor::Goto(0, y))?;
@@ -191,27 +192,53 @@ fn draw_frame(mut stdout: &Stdout, frame: &ProcessPanelFrame) -> Result<(), Box<
         write!(stdout, "{}", cursor::Goto(0, height - y))?;
         Ok(())
     }
+    let partitions = frame.partition(height);
     write!(stdout, "{}", clear::All)?;
     let mut y_offset: u16 = 1;
-    if let Some(filter_line) = &frame.filter_line {
-        goto_from_top(stdout, y_offset)?;
-        for seg in filter_line {
+    if let Some(partitions) = partitions {
+        let mut partition_iter = partitions.iter();
+        if let Some(filter_line) = &frame.filter_line {
+            goto_from_top(stdout, y_offset)?;
+            for seg in filter_line {
+                draw_colored_segment(stdout, seg)?;
+            }
+            let filter_partition = partition_iter.next().unwrap();
+            y_offset += filter_partition.height;
+        }
+        let mut process_iter = frame.process_lines.iter();
+        let process_partition = partition_iter.next().unwrap();
+        if !process_partition.fits {
+            let end_idx = min(frame.process_lines.len(), process_partition.height as usize);
+            if let Some(current_process_idx) = frame.current_process_line_index {
+                process_iter = frame.process_lines[current_process_idx..end_idx].iter();
+            }else {
+                process_iter = frame.process_lines[..end_idx].iter();
+            }
+        }
+        for line in process_iter {
+            goto_from_top(stdout, y_offset)?;
+
+            for seg in line {
+                draw_colored_segment(stdout, seg)?;
+            }
+            y_offset += 1;
+        }
+        let message_partition = partition_iter.next().unwrap();
+        let mut messages_iter = frame.messages.iter();
+        let end_idx = min(frame.messages.len(), message_partition.height as usize);
+        if !message_partition.fits {
+            messages_iter = frame.messages[..end_idx].iter();
+        } 
+        for (idx, seg) in messages_iter.enumerate() {
+            let y_offest_from_bottom = end_idx as u16 - idx as u16;
+            goto_from_bottom(stdout, height, y_offest_from_bottom)?;
             draw_colored_segment(stdout, seg)?;
         }
-        y_offset += 1;
-    }
-    for line in frame.process_lines.iter() {
+    } else {
         goto_from_top(stdout, y_offset)?;
-        for seg in line {
-            draw_colored_segment(stdout, seg)?;
-        }
-        y_offset += 1;
+        write!(stdout, "{}Screen too small", Fg(color::Red))?;
     }
-    for (idx, seg) in frame.messages.iter().enumerate() {
-        let y_offest_from_bottom = frame.messages.len() as u16 - idx as u16;
-        goto_from_bottom(stdout, height, y_offest_from_bottom)?;
-        draw_colored_segment(stdout, seg)?;
-    }
+
     stdout.flush()?;
     Ok(())
 }
