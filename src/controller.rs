@@ -314,7 +314,8 @@ impl Controller {
                 .find(|p| p.status != ProcessStatus::Halted)
                 .is_none()
             {
-                self.running.store(false, std::sync::atomic::Ordering::Relaxed);
+                self.running
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }

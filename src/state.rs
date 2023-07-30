@@ -15,12 +15,12 @@ pub struct State {
 
 impl State {
     pub fn new(config: &ProcTmuxConfig) -> Self {
-        let mut processes: Vec<_> =  config
-                .procs
-                .iter()
-                .enumerate()
-                .map(|(ix, (k, v))| Process::new(ix + 1, k, v.clone()))
-                .collect();
+        let mut processes: Vec<_> = config
+            .procs
+            .iter()
+            .enumerate()
+            .map(|(ix, (k, v))| Process::new(ix + 1, k, v.clone()))
+            .collect();
         if config.layout.sort_process_list_alpha {
             trace!("Sorting processes alphabetically");
             processes.sort_by(|proc1, proc2| proc1.label.cmp(&proc2.label));

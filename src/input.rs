@@ -9,7 +9,11 @@ use termion::{event::Key, input::TermRead};
 use crate::config::KeybindingConfig;
 use crate::controller::Controller;
 
-pub fn input_loop(controller: Arc<Mutex<Controller>>, keybinding: KeybindingConfig, running: Arc<AtomicBool>) {
+pub fn input_loop(
+    controller: Arc<Mutex<Controller>>,
+    keybinding: KeybindingConfig,
+    running: Arc<AtomicBool>,
+) {
     let stdin = stdin();
 
     for c in stdin.keys() {
@@ -25,8 +29,8 @@ pub fn input_loop(controller: Arc<Mutex<Controller>>, keybinding: KeybindingConf
                 } else {
                     match handle_normal_mode_keypresses(controller.clone(), key, &keybinding) {
                         Ok(true) => break,
-                        Ok(false) => {},
-                        Err(e) => error!("Error handling keypress {:?}: {}", key, e)
+                        Ok(false) => {}
+                        Err(e) => error!("Error handling keypress {:?}: {}", key, e),
                     }
                 }
             }
@@ -51,14 +55,14 @@ pub fn input_loop(controller: Arc<Mutex<Controller>>, keybinding: KeybindingConf
                     }
                 } else {
                     match handle_normal_mode_keypresses(controller.clone(), key, &keybinding) {
-                        Ok(_) => {},
-                        Err(e) => error!("Error handling keypress {:?}: {}", key, e)
+                        Ok(_) => {}
+                        Err(e) => error!("Error handling keypress {:?}: {}", key, e),
                     }
                 }
             }
             Some(Err(e)) => {
                 error!("Error reading stdin: {}", e);
-            },
+            }
             None => {}
         }
 
