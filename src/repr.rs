@@ -14,17 +14,17 @@ pub fn get_status_arrow_and_color(state: &State, process: &Process) -> ColoredSe
         ProcessStatus::Running => {
             let fg = color_from_config_string(&state.config.style.status_running_color)
                 .unwrap_or(Box::new(color::Green));
-            ColoredSegment::new_basic(fg, UP.to_string())
+            ColoredSegment::new_basic(fg, format!(" {}",UP))
         }
         ProcessStatus::Halting => {
             let fg = color_from_config_string(&state.config.style.status_halting_color)
                 .unwrap_or(Box::new(color::Yellow));
-            ColoredSegment::new_basic(fg, DOWN.to_string())
+            ColoredSegment::new_basic(fg, format!(" {}",DOWN))
         }
         ProcessStatus::Halted => {
             let fg = color_from_config_string(&state.config.style.status_stopped_color)
                 .unwrap_or(Box::new(color::Red));
-            ColoredSegment::new_basic(fg, DOWN.to_string())
+            ColoredSegment::new_basic(fg, format!(" {}",DOWN))
         }
     }
 }
