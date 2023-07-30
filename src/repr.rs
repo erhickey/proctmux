@@ -1,30 +1,33 @@
 /*
-    A module that provides handy representation / conversion fucntions 
+    A module that provides handy representation / conversion fucntions
 */
-use termion::{color::{self, Color}, event::Key};
-use std::error::Error;
 use crate::{
     constants::{ANSI_PREFIX, DOWN, UP},
     frame::ColoredSegment,
     process::{Process, ProcessStatus},
     state::State,
 };
+use std::error::Error;
+use termion::{
+    color::{self, Color},
+    event::Key,
+};
 pub fn get_status_arrow_and_color(state: &State, process: &Process) -> ColoredSegment {
     match process.status {
         ProcessStatus::Running => {
             let fg = color_from_config_string(&state.config.style.status_running_color)
                 .unwrap_or(Box::new(color::Green));
-            ColoredSegment::new_basic(fg, format!(" {}",UP))
+            ColoredSegment::new_basic(fg, format!(" {}", UP))
         }
         ProcessStatus::Halting => {
             let fg = color_from_config_string(&state.config.style.status_halting_color)
                 .unwrap_or(Box::new(color::Yellow));
-            ColoredSegment::new_basic(fg, format!(" {}",DOWN))
+            ColoredSegment::new_basic(fg, format!(" {}", DOWN))
         }
         ProcessStatus::Halted => {
             let fg = color_from_config_string(&state.config.style.status_stopped_color)
                 .unwrap_or(Box::new(color::Red));
-            ColoredSegment::new_basic(fg, format!(" {}",DOWN))
+            ColoredSegment::new_basic(fg, format!(" {}", DOWN))
         }
     }
 }
