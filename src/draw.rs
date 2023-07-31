@@ -211,7 +211,7 @@ fn draw_frame(mut stdout: &Stdout, frame: &ProcessPanelFrame) -> Result<(), Box<
             let end_idx = min(frame.process_lines.len(), process_partition.height as usize);
             if let Some(current_process_idx) = frame.current_process_line_index {
                 process_iter = frame.process_lines[current_process_idx..end_idx].iter();
-            }else {
+            } else {
                 process_iter = frame.process_lines[..end_idx].iter();
             }
         }
@@ -228,7 +228,7 @@ fn draw_frame(mut stdout: &Stdout, frame: &ProcessPanelFrame) -> Result<(), Box<
         let end_idx = min(frame.messages.len(), message_partition.height as usize);
         if !message_partition.fits {
             messages_iter = frame.messages[..end_idx].iter();
-        } 
+        }
         for (idx, seg) in messages_iter.enumerate() {
             let y_offest_from_bottom = end_idx as u16 - idx as u16;
             goto_from_bottom(stdout, height, y_offest_from_bottom)?;

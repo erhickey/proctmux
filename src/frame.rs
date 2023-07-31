@@ -1,4 +1,4 @@
-use std::{fmt::Display };
+use std::fmt::Display;
 
 use termion::color::Color;
 
@@ -44,9 +44,9 @@ impl ProcessPanelFrame {
 }
 
 #[derive(Debug)]
-pub struct Partition  { 
+pub struct Partition {
     pub height: u16,
-    pub fits: bool 
+    pub fits: bool,
 }
 
 // My thought here is that we might have other frame types if we decide to do variable interpolation
@@ -56,44 +56,42 @@ pub trait Partitionable {
     fn partition(&self, height: u16) -> Option<Vec<Partition>>;
 }
 
-
 impl Partitionable for ProcessPanelFrame {
     fn partition(&self, height: u16) -> Option<Vec<Partition>> {
         trace!("partitioning frame with height {}", height);
         if height < MIN_SCREEN_HEIGHT {
             return None;
         }
-        let mut remaining_height = height; 
+        let mut remaining_height = height;
         let mut partitions = vec![];
         if self.filter_line.is_some() {
             let filter_line_height = 1;
-            partitions.push(Partition { 
-                height: filter_line_height, 
-                fits: filter_line_height <= remaining_height 
+            partitions.push(Partition {
+                height: filter_line_height,
+                fits: filter_line_height <= remaining_height,
             });
             remaining_height -= filter_line_height;
         }
         if self.process_lines.len() + self.messages.len() <= remaining_height as usize {
-            partitions.push( Partition { 
-                height: self.process_lines.len() as u16, 
-                fits: true 
+            partitions.push(Partition {
+                height: self.process_lines.len() as u16,
+                fits: true,
             });
-            partitions.push( Partition { 
-                height: self.messages.len() as u16, 
-                fits: true 
+            partitions.push(Partition {
+                height: self.messages.len() as u16,
+                fits: true,
             });
         } else {
-            
-            let process_partition_height = (remaining_height as usize * 75 / 100 ) as u16  ;
-            partitions.push(Partition { 
-                height: process_partition_height, 
-                fits:  self.process_lines.len() <= process_partition_height as usize
+            let process_partition_height = (remaining_height as usize * 75 / 100) as u16;
+            partitions.push(Partition {
+                height: process_partition_height,
+                fits: self.process_lines.len() <= process_partition_height as usize,
             });
             remaining_height -= process_partition_height;
 
-            partitions.push(Partition { 
-                height: remaining_height, 
-                fits: self.messages.len() <= remaining_height as usize
+            partitions.push(Partition {
+                height: remaining_height,
+                fits: self.messages.len() <= remaining_height as usize,
             });
             trace!("using percentage partitions - frame: {:?}", partitions);
         }
