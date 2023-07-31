@@ -191,6 +191,27 @@ pub fn select_pane(pane_id: &str) -> IoResult<Output> {
         .output()
 }
 
+pub fn pane_variables(pane_id: &str, format: &str) -> IoResult<Output> {
+    Command::new("tmux")
+        .arg("list-panes")
+        .arg("-t")
+        .arg(pane_id)
+        .arg("-f")
+        .arg(format!("#{{m:{},#{{pane_id}}}}", pane_id))
+        .arg("-F")
+        .arg(format)
+        .output()
+}
+
+pub fn toggle_zoom(pane_id: &str) -> IoResult<Output> {
+    Command::new("tmux")
+        .arg("resize-pane")
+        .arg("-Z")
+        .arg("-t")
+        .arg(pane_id)
+        .output()
+}
+
 pub fn control_mode(session_id: &str) -> IoResult<Child> {
     Command::new("tmux")
         .arg("-C")

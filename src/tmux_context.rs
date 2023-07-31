@@ -129,4 +129,31 @@ impl TmuxContext {
         }
         output
     }
+
+    pub fn is_zoomed_in(&self) -> bool {
+        let output = tmux::read_bytes(tmux::pane_variables(
+            &self.pane_id,
+            "#{window_zoomed_flag} #{pane_active}",
+        ))
+        .unwrap_or("".to_string());
+        output == "1 1"
+    }
+
+    pub fn zoom_in(&self) -> Result<(), Box<dyn Error>> {
+        if !self.is_zoomed_in() {
+            self.toggle_zoom()?;
+        }
+        Ok(())
+    }
+
+    pub fn zoom_out(&self) -> Result<(), Box<dyn Error>> {
+        if self.is_zoomed_in() {
+            self.toggle_zoom()?;
+        }
+        Ok(())
+    }
+
+    pub fn toggle_zoom(&self) -> IoResult<Output> {
+        tmux::toggle_zoom(&self.pane_id)
+    }
 }
